@@ -6,7 +6,7 @@ public class StartingPoint(string name, string url, int intDepth, int extDepth) 
     private string _url = url;
     private int _internalDepth = intDepth;
     private int _externalDepth = extDepth;
-    private DateTime _lastScanTimestamp = DateTime.MinValue;
+    private DateTime _lastScanTimestamp = DateTime.MinValue; // TODO
 
     // for JSON deserialization (in DB.WriteDB()) to work properly,
     // we need this default (parameterless) constructor.

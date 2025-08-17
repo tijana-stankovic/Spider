@@ -10,7 +10,8 @@ using System.Linq;
 using SpiderView;
 
 public class CrawlResult {
-    public Dictionary<string, HashSet<string>> KeywordToUrls { get; } = [];
+    public Dictionary<string, (HashSet<string> urlSet, string spName)> KeywordToUrls { get; } = [];
+    public Dictionary<string, (HashSet<string> keywordsSet, string spName)> UrlToKeywords { get; } = [];
     public HashSet<string> VisitedUrls { get; } = [];
 }
 
@@ -19,58 +20,66 @@ public static class WebCrawler {
 
     public static async Task<CrawlResult> CrawlAsync(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
-        var queue = new Queue<(string url, int internalLeft, int externalLeft)>();
+        var queue = new Queue<(string url, int internalLeft, int externalLeft, string spName)>();
 
         foreach (var sp in startingPoints) {
-            queue.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth));
+            queue.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name));
         }
 
         while (queue.Count > 0) {
-            var (url, internalLeft, externalLeft) = queue.Dequeue();
-            if (result.VisitedUrls.Contains(url)) {
+            var (url, internalLeft, externalLeft, name) = queue.Dequeue(); // dequeue next URL
+
+            if (result.VisitedUrls.Contains(url)) { // if URL is already visited, skip it
+                View.Print("Link already visited: " + url);
+                View.Print("    Remaining links: " + queue.Count);
                 continue;
             }
 
             View.Print("Crawling: " + url);
             View.Print("    Remaining internal links: " + internalLeft);
             View.Print("    Remaining external links: " + externalLeft);
+            View.Print("    Remaining links: " + queue.Count);
 
             result.VisitedUrls.Add(url);
 
-            string? page = await FetchPageAsync(url);
+            string? page = await FetchPageAsync(url); // fetch page content
 
-            if (page == null) {
+            if (page == null) { // if page could not be fetched, skip it
+                View.Print("    Page could not be fetched. Skipping.");
                 continue;
             }
 
             // Keyword match
-            var found = FindKeywords(page, keywords);
-            foreach (var kw in found) {
-                if (!result.KeywordToUrls.TryGetValue(kw, out var urlSet)) {
-                    urlSet = [];
-                    result.KeywordToUrls[kw] = urlSet;
+            var foundKeywords = FindKeywords(page, keywords);
+            if (foundKeywords.Count > 0) {
+                View.Print("    Found keywords: " + string.Join(", ", foundKeywords));
+                result.UrlToKeywords[url] = (foundKeywords, name); 
+            }
+            foreach (var keyword in foundKeywords) {
+                if (!result.KeywordToUrls.TryGetValue(keyword, out var value)) { // if keyword is already found in some of previous pages, get that Set
+                    value = (new HashSet<string>(), name); // otherwise create a new Set
+                    result.KeywordToUrls[keyword] = value; // add the Set to the dictionary
                 }
-                urlSet.Add(url);
-                // TODO brisi ovaj ispis
-                Console.WriteLine(kw + " -> " + url);
+                value.urlSet.Add(url); // add the current URL to the Set
+                //Console.WriteLine("    Found keyword: '" + keyword + "'");
             }
 
             // Link extraction
             foreach (var link in ExtractAbsoluteLinks(page, url)) {
-                if (result.VisitedUrls.Contains(link)) continue;
+                if (result.VisitedUrls.Contains(link)) { // if URL is already visited, skip it
+                    continue;
+                }
 
                 string baseDomain = GetBaseDomain(url);
                 string linkDomain = GetBaseDomain(link);
 
                 if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase) && internalLeft > 0) {
-                    // TODO - brisi ovaj if i ispis
-                    // if (link.Contains(".js"))
-                        Console.WriteLine(url + " -> " + link);
-
-                    queue.Enqueue((link, internalLeft - 1, externalLeft));
+                    Console.WriteLine("    Added new internal link: " + link);
+                    queue.Enqueue((link, internalLeft - 1, externalLeft, name));
                 }
                 else if (externalLeft > 0) {
-                    queue.Enqueue((link, internalLeft, externalLeft - 1));
+                    Console.WriteLine("    Added new external link: " + link);
+                    queue.Enqueue((link, internalLeft, externalLeft - 1, name));
                 }
             }
         }

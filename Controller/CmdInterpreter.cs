@@ -363,13 +363,19 @@ public class CmdInterpreter(DB db) {
         // CrawlResult result = await WebCrawler.CrawlAsync(startingPoints, keywords);
         CrawlResult result = WebCrawler.CrawlAsync(startingPoints, keywords).GetAwaiter().GetResult();
 
+        View.Print("");
         View.Print("The web crawling process has finished.");
         View.Print("");
         View.Print("Crawling results:");
-        foreach (var kv in result.KeywordToUrls) {
-            Console.WriteLine($"Keyword: {kv.Key}");
-            foreach (var matchUrl in kv.Value) {
-                Console.WriteLine($"  -> {matchUrl}");
+        foreach (var url in result.UrlToKeywords) {
+            Console.WriteLine($"URL: {url.Key}");
+            Console.WriteLine($"    Starting point: {url.Value.spName}");
+            Console.WriteLine($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
+        }
+        foreach (var keyword in result.KeywordToUrls) {
+            Console.WriteLine($"Keyword: {keyword.Key}");
+            foreach (var matchUrl in keyword.Value.urlSet) {
+                Console.WriteLine($"    -> {matchUrl}");
             }
         }        
     }
