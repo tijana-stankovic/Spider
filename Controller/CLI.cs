@@ -1,13 +1,13 @@
-namespace PhotoController;
+namespace SpiderController;
 
-using PhotoView;
+using SpiderView;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 public class CLI {
-    public Command ReadCommand() {
-        List<string> argList = new List<string>();
+    static public Command ReadCommand() {
+        List<string> argList = [];
 
         try {
             string? line = Console.ReadLine();
@@ -54,19 +54,19 @@ public class CLI {
             }
         } else {
             cmd = "";
-            cmdArgs = Array.Empty<string>();
+            cmdArgs = [];
         }
 
-        Command command = new Command(cmd, cmdArgs);
+        Command command = new(cmd, cmdArgs);
         return command;
     }
 
-    public char AskYesNo(View view, string message, bool cancel) {
+    static public char AskYesNo(string message, bool cancel) {
         string prompt = cancel ? " (Yes/No/Cancel)" : " (Yes/No)";
         string? response;
 
         while (true) {
-            view.Print(message + prompt + ": ", false);
+            View.Print(message + prompt + ": ", false);
             try {
                 response = Console.ReadLine()?.Trim().ToLower();
             } catch (IOException) {
@@ -81,7 +81,7 @@ public class CLI {
             } else if (cancel && (response == "c" || response == "cancel")) {
                 return 'C';
             } else {
-                view.Print("Invalid response. Please enter 'Yes', 'No'" + (cancel ? ", or 'Cancel'" : "") + ".");
+                View.Print("Invalid response. Please enter 'Yes', 'No'" + (cancel ? ", or 'Cancel'" : "") + ".");
             }
         }
     }

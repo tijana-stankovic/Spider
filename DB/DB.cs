@@ -1,14 +1,13 @@
-namespace PhotoDB;
+namespace SpiderDB;
 
-using PhotoStatus;
-using PhotoUtil;
+using SpiderStatus;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
 public class DB {
-    public static readonly string DefaultDbFilename = "photo_db.pdb";
+    public static readonly string DefaultDbFilename = "spider_db.sdb";
     public static readonly int DbVersion = 1;
     private string _dbFilename = DefaultDbFilename;
 
@@ -26,7 +25,7 @@ public class DB {
     public string DbFilename {
         get => _dbFilename;
         set {
-            if (string.IsNullOrEmpty(value)) {
+            if (string.IsNullOrWhiteSpace(value)) {
                 throw new ArgumentException("DB filename must be specified!");
             }
             if (_dbFilename != value) {
@@ -89,223 +88,177 @@ public class DB {
         }
     }
 
-    public int AddFile(DBFile file) {
+    public int AddPage(DBPage page) {
         var keywords = new HashSet<string>();
-        int oldFileID = Data.GetFileID(file.Fullpath);
+        int oldPageID = Data.GetPageID(page.URL);
 
-        if (oldFileID != 0) {
-            file.ID = oldFileID;
-            var f = GetFile(oldFileID);
-            if (f != null) {
-                keywords = f.Keywords;
+        if (oldPageID != 0) {
+            page.ID = oldPageID;
+            var p = GetPage(oldPageID);
+            if (p != null) {
+                keywords = p.Keywords;
             }
-            RemoveFile(oldFileID);
+            RemovePage(oldPageID);
         } else {
-            file.ID = NextFileID();
+            page.ID = NextPageID();
         }
 
-        Data.AddFile(file);
-        int fileID = file.ID;
-        Data.AddFilePath(file.Fullpath, fileID);
-        Data.AddFileLocation(file.Location, fileID);
-        Data.AddFileFilename(file.Filename, fileID);
-        Data.AddFileExtension(file.Extension, fileID);
-        Data.AddFileTimestamp(file.Timestamp, fileID);
-        Data.AddFileSize(file.Size, fileID);
-        Data.AddFileChecksum(file.Checksum, fileID);
+        Data.AddPage(page);
+        int pageID = page.ID;
+        Data.AddPageURL(page.URL, pageID);
+        Data.AddPageWebsite(page.Website, pageID);
+        Data.AddPageName(page.Name, pageID);
 
-        if (oldFileID != 0) {
+        if (oldPageID != 0) {
             foreach (var keyword in keywords) {
-                AddKeyword(keyword, fileID);
-            }
-        }
-
-        foreach (var meta in file.Metadata) {
-            Data.AddFileMetadataTag(meta.Tag, fileID);
-        }
-
-        foreach (var potentialDuplicateFileID in Data.FindPotentialDuplicatesIDs(file.Size, file.Checksum)) {
-            if (potentialDuplicateFileID != fileID) {
-                file.AddPotentialDuplicate(potentialDuplicateFileID);
-                var potentialDuplicateFile = Data.GetFile(potentialDuplicateFileID);
-                potentialDuplicateFile?.AddPotentialDuplicate(fileID);
-                Data.AddPotentialDuplicate(fileID);
-                Data.AddPotentialDuplicate(potentialDuplicateFileID);
-                AddKeyword("DUP?", fileID);
-                AddKeyword("DUP?", potentialDuplicateFileID);
+                //AddKeyword(keyword, pageID);
             }
         }
 
         DataChanged = true;
 
-        return oldFileID;
+        return oldPageID;
     }
 
-    public void RemoveFile(int fileID) {
-        var file = Data.GetFile(fileID);
-        if (file == null) return;
+    public void RemovePage(int pageID) {
+        var page = Data.GetPage(pageID);
+        if (page == null) return;
 
-        Data.RemoveFile(fileID);
-        Data.RemoveFilePath(file.Fullpath);
-        Data.RemoveFileLocation(file.Location, fileID);
-        Data.RemoveFileFilename(file.Filename, fileID);
-        Data.RemoveFileExtension(file.Extension, fileID);
-        Data.RemoveFileTimestamp(file.Timestamp, fileID);
-        Data.RemoveFileSize(file.Size, fileID);
-        Data.RemoveFileChecksum(file.Checksum, fileID);
+        Data.RemovePage(pageID);
+        Data.RemovePageURL(page.URL);
+        Data.RemovePageWebsite(page.Website, pageID);
+        Data.RemovePageName(page.Name, pageID);
 
-        foreach (var keyword in file.Keywords) {
-            Data.RemoveFileKeyword(keyword, fileID);
-        }
-        foreach (var metadataInfo in file.Metadata) {
-            Data.RemoveFileMetadataTag(metadataInfo.Tag, fileID);
-        }
-
-        RemoveFileDuplicateInformation(file);
-
-        DataChanged = true;
-    }
-
-    public void RemoveFileDuplicateInformation(DBFile file) {
-        int fileID = file.ID;
-
-        foreach (var duplicateFileID in file.Duplicates) {
-            var duplicateFile = Data.GetFile(duplicateFileID);
-            duplicateFile?.RemoveDuplicate(fileID);
-            if (duplicateFile?.Duplicates.Count == 0) {
-                Data.RemoveDuplicate(duplicateFileID);
-                RemoveKeyword("DUP", duplicateFileID);
-            }
-        }
-
-        foreach (var potentialDuplicateFileID in file.PotentialDuplicates) {
-            var potentialDuplicateFile = Data.GetFile(potentialDuplicateFileID);
-            potentialDuplicateFile?.RemovePotentialDuplicate(fileID);
-            if (potentialDuplicateFile?.PotentialDuplicates.Count == 0) {
-                Data.RemovePotentialDuplicate(potentialDuplicateFileID);
-                RemoveKeyword("DUP?", potentialDuplicateFileID);
-            }
-        }
-
-        file.Duplicates = new();
-        file.PotentialDuplicates = new();
-        Data.RemoveDuplicate(fileID);
-        RemoveKeyword("DUP", fileID);
-        Data.RemovePotentialDuplicate(fileID);
-        RemoveKeyword("DUP?", fileID);
-
-        DataChanged = true;
-    }
-
-    public Dictionary<int, int> ProcessDuplicates(int fileID) {
-        HashSet<int> duplicatesIDs = new();
-        duplicatesIDs.Add(fileID);
-        DBFile file = Data.GetFile(fileID)!;
-        foreach (int duplicateFileID in Data.FindPotentialDuplicatesIDs(file.Size, file.Checksum)) {
-            if (duplicateFileID != fileID) {
-                DBFile duplicateFile = Data.GetFile(duplicateFileID)!;
-                if (FileSystem.CompareFiles(file.Fullpath, duplicateFile.Fullpath)) {
-                    duplicatesIDs.Add(duplicateFileID);
-                }
-            }
-        }
-
-        Dictionary<int, int> duplicatesFound = new();
-        int numOfDuplicates = duplicatesIDs.Count - 1;
-        if (numOfDuplicates > 0) {
-            foreach (int fID in duplicatesIDs) {
-                RemoveFileDuplicateInformation(Data.GetFile(fID)!);
-                duplicatesFound[fID] = numOfDuplicates;
-            }
-
-            foreach (int fID in duplicatesIDs) {
-                file = Data.GetFile(fID)!;
-                foreach (int fDupID in duplicatesIDs) {
-                    if (fID != fDupID) {
-                        file.AddDuplicate(fDupID);
-                        AddKeyword("DUP", fID);
-                        Data.AddDuplicate(fID);
-                    }
-                }
-            }
-        } else {
-            RemoveFileDuplicateInformation(file);
+        foreach (var keyword in page.Keywords) {
+            Data.RemovePageKeyword(keyword, pageID);
         }
 
         DataChanged = true;
-
-        return duplicatesFound;
     }
 
-    public int NextFileID() { 
-        return Data.NextFileID();
+    public int NextPageID() { 
+        return Data.NextPageID();
     }
 
-    public int GetFileID(string fullpath) {
-        return Data.GetFileID(fullpath);
+    public int GetPageID(string URL) {
+        return Data.GetPageID(URL);
     }
 
-    public int GetFileID(string location, string filename, string extension) {
-        return Data.GetFileID(location, filename, extension);
+    public DBPage? GetPage(int pageID) { 
+        return Data.GetPage(pageID);
     }
 
-    public DBFile? GetFile(int fileID) { 
-        return Data.GetFile(fileID);
-    }
-
-    public HashSet<int>? GetFileIDs(string key, char where) {
-        HashSet<int>? fileIDs = null;
+    public HashSet<int>? GetPageIDs(string key, char where) {
+        HashSet<int>? pageIDs = null;
         switch (char.ToUpper(where)) {
-            case 'F': {
-                int fileID = Data.GetFileID(key);
-                if (fileID != 0) {
-                    fileIDs = new HashSet<int>();
-                    fileIDs.Add(fileID);
+            case 'P': {
+                int pageID = Data.GetPageID(key);
+                if (pageID != 0) {
+                    pageIDs = [];
+                    pageIDs.Add(pageID);
                 }
                 break;
             }
-            case 'D': {
-                fileIDs = Data.GetFileIDsInLocation(key);
+            case 'S': {
+                pageIDs = Data.GetPageIDsOnWebsite(key);
                 break;
             }
             case 'K': {
-                fileIDs = Data.GetFileIDsWithKeyword(key);
+                pageIDs = Data.GetPageIDsWithKeyword(key);
                 break;
             }
             default: {
-                throw new ArgumentException("Method DB.GetFileIDs() - Invalid 'where' parameter value!");
+                throw new ArgumentException("Method DB.GetPageIDs() - Invalid 'where' parameter value!");
             }
         }
-        return fileIDs;
+        return pageIDs;
     }
 
-    public void AddKeyword(string keyword, int fileID) {
-        var file = Data.GetFile(fileID);
-        if (file != null) {
-            file.AddKeyword(keyword);
-            Data.AddFileKeyword(keyword, fileID);
+    // Add or update a starting point information
+    // Returns true if it was added, or false if it was updated
+    public bool AddStartingPoint(StartingPoint sp) {
+        bool added = false;
+        if (Data.AddStartingPoint(sp)) {
+            added = true;
+        }
+        DataChanged = true;
+        return added;
+    }
+
+    // Removes a starting point
+    // Returns true if it was removed, or false if starting point was not found
+    public bool RemoveStartingPoint(string spName) {
+        // TODO:  ovde je kompleksnije - treba ukloniti i sve sto je povezano sa ovim starting point-om
+        //        dakle, sve stranice koje imaju veze sa tim SP, a kad se uklanjaju stranice, onda se uklanjaju i ostale veze
+        //        u sustini, treba proci kroz NameToPages i za sve stranice povezane sa tim SP, treba ih ukloniti
+        //        a to znaci da treba otici u DBPage za svaku od tih stranica i ukloniti url, website i keywords i na kraju samu stranicu
+        if (Data.RemoveStartingPoint(spName)) {
+            DataChanged = true;
+            return true;
+        }
+        return false;
+    }
+
+    // Add or update a keyword
+    // Returns the old keyword if it was updated, or null if it was added
+    public string? AddKeyword(string keyword) {
+        var oldKeyword = Data.AddKeyword(keyword);
+        if (oldKeyword == null || oldKeyword != keyword) {
             DataChanged = true;
         }
+        return oldKeyword;
     }
 
-    public void RemoveKeyword(string keyword, int fileID) {
-        var file = Data.GetFile(fileID);
-        if (file != null) {
-            file.RemoveKeyword(keyword);
-            Data.RemoveFileKeyword(keyword, fileID);
+    // Removes a keyword
+    // Returns the old keyword if it was updated, or null if keyword was not found
+    public string? RemoveKeyword(string keyword) {
+        // TODO: ovo je kompleksnije - treba ukloniti i sve veze ovog keyworda sa svim stranicama
+        //       znaci ici kroz sve stranice koje su u KeywordToPages povezane sa ovom keyword
+        //       za svaku od tih stranica ukloniti keyword iz _keywords stranice,
+        //       pa na kraju ukloniti keyword i iz KeywordToPages
+        var oldKeyword = Data.RemoveKeyword(keyword);
+        if (oldKeyword != null) {
             DataChanged = true;
         }
+        return oldKeyword;
     }
 
+    // return a sorted list of all keywords in the database
     public List<string> GetKeywords() {
         return Data.GetKeywords();
     }
 
-    public List<string> GetDirectories() { 
-        return Data.GetDirectories(); 
+    // return a sorted list of all keywords contained in scanned pages.
+    public List<string> GetFoundKeywords() {
+        return Data.GetFoundKeywords();
+    }
+
+    // return a sorted list of all starting points names in the database
+    public List<string> GetSPNames() {
+        return Data.GetSPNames();
+    }
+
+    // return Starting Point with the specified name
+    // if not found, return null
+    public StartingPoint? GetStartingPoint(string spName) {
+        return Data.GetStartingPoint(spName);
+    }
+
+    public List<string> GetFoundWebsites() { 
+        return Data.GetFoundWebsites(); 
     }
 
     public Dictionary<string, int> GetDBStatistics() { 
         return Data.GetDBStatistics();
     }
+
+    // public void Test() {
+    //     DBPage page = new DBPage();
+    //     page.ID = 1;
+    //     page.Name = "Test Page";
+    //     page.URL = "http://www.test.com";
+    //     page.Website = "http://www.test.com";
+    //     page.Keywords = [];
+    //     Data.AddPage(page);
+    // }
 }

@@ -1,11 +1,7 @@
-namespace PhotoController;
+namespace SpiderController;
 
-public class Command {
-    public string Name { get; }
-    public string[] Args { get; }
-
-    public Command(string cmdName, string[] cmdArgs) {
-        Name = cmdName;
-        Args = cmdArgs;
-    }
+public class Command(string cmdName, string[] cmdArgs)
+{
+    public string Name { get; } = cmdName;
+    public string[] Args { get; } = cmdArgs;
 }

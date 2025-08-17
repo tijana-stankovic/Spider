@@ -1,4 +1,4 @@
-namespace PhotoDB;
+namespace SpiderDB;
 
 using System.Collections.Generic;
 
@@ -15,295 +15,226 @@ public class DBData {
     // for JSON serialization and deserialization (in DB.ReadDB() and DB.WriteDB()) to 
     // work properly, the properties must be public and have both getter and setter
     public int DbVersion { get; set; } = 0;
-    public int LastFileID { get; set; } = 0;
-    public Dictionary<int, DBFile> Files { get; set; } = new();
-    public Dictionary<string, int> Fullpaths { get; set; } = new();
-    public Dictionary<string, HashSet<int>> Locations { get; set; } = new();
-    public Dictionary<string, HashSet<int>> Filenames { get; set; } = new();
-    public Dictionary<string, HashSet<int>> Extensions { get; set; } = new();
-    public Dictionary<string, HashSet<int>> Timestamps { get; set; } = new();
-    public Dictionary<long, HashSet<int>> Sizes { get; set; } = new();
-    public Dictionary<int, HashSet<int>> Checksums { get; set; } = new();
-    public Dictionary<string, HashSet<int>> Keywords { get; set; } = new();
-    public Dictionary<string, HashSet<int>> MetadataTags { get; set; } = new();
-    public HashSet<int> Duplicates { get; set; } = new();
-    public HashSet<int> PotentialDuplicates { get; set; } = new();
+    public int LastPageID { get; set; } = 0;
+    public Dictionary<int, DBPage> Pages { get; set; } = []; // index: page ID -> page (this is the place all pages are stored) (1:1)
+    public Dictionary<string, int> URLs { get; set; } = []; // index: full, unique page URL -> page ID (1:1)
+    public Dictionary<string, HashSet<int>> WebsiteToPages { get; set; } = []; // index: Website URL -> page ID (1:N)
+    public Dictionary<string, HashSet<int>> NameToPages { get; set; } = []; // index: Search starting point name -> page ID (1:N)
+    public Dictionary<string, HashSet<int>> KeywordToPages { get; set; } = []; // index: keyword -> page ID (1:N)
 
-    public int NextFileID() {
-        LastFileID++;
-        return LastFileID;
+    public Dictionary<string, string> Keywords { get; set; } = []; // all the keywords the user is searching for (the user is interested in)
+                                                                   // keyword.upper() -> the original keyword entered by the user
+    public Dictionary<string, StartingPoint> SPNames { get; set; } = []; // starting point names
+
+    public int NextPageID() {
+        LastPageID++;
+        return LastPageID;
     }
 
     // return a sorted list of all keywords in the database
     public List<string> GetKeywords() {
-        var keys = new List<string>(Keywords.Keys);
+        List<string> keys = [];
+        foreach (var keyword in Keywords.Values) {
+            keys.Add(keyword);
+        }
         keys.Sort();
         return keys;
     }
 
-    // return a sorted list of all directories in the database
-    public List<string> GetDirectories() {
-        var dirs = new List<string>(Locations.Keys);
-        dirs.Sort();
-        return dirs;
+    // return a sorted list of all keywords contained in scanned pages.
+    public List<string> GetFoundKeywords() {
+        var keys = new List<string>(KeywordToPages.Keys);
+        keys.Sort();
+        return keys;
     }
 
-    public DBFile? GetFile(int fileID) {
-        return Files.TryGetValue(fileID, out var file) ? file : null;
-    }
-
-    public void AddFile(DBFile file) {
-        Files[file.ID] = file;
-    }
-
-    public void RemoveFile(int fileID) {
-        Files.Remove(fileID);
-    }
-
-    public void AddFilePath(string fullpath, int fileID) {
-        if (string.IsNullOrEmpty(fullpath)) {
-            throw new ArgumentException("Path must be specified!");
+    // return a sorted list of all starting points names in the database
+    public List<string> GetSPNames() {
+        List<string> names = [];
+        foreach (var sp in SPNames.Values) {
+            names.Add(sp.Name);
         }
-        Fullpaths[fullpath] = fileID;
+        names.Sort();
+        return names;
     }
 
-    public void RemoveFilePath(string fullpath) {
-        Fullpaths.Remove(fullpath);
+    // return Starting Point with the specified name
+    // if not found, return null
+    public StartingPoint? GetStartingPoint(string spName) {
+        if (string.IsNullOrWhiteSpace(spName)) {
+            throw new ArgumentException("Starting Point name must be specified!");
+        }
+        string key = spName.ToUpper();
+        return SPNames.TryGetValue(key, out var sp) ? sp : null;
     }
 
-    public void AddFileLocation(string location, int fileID) {
-        if (string.IsNullOrEmpty(location)) {
-            throw new ArgumentException("File location must be specified!");
+    // return a sorted list of all sites contained in scanned pages.
+    public List<string> GetFoundWebsites() {
+        var websites = new List<string>(WebsiteToPages.Keys);
+        websites.Sort();
+        return websites;
+    }
+
+    public DBPage? GetPage(int pageID) {
+        return Pages.TryGetValue(pageID, out var file) ? file : null;
+    }
+
+    public void AddPage(DBPage page) {
+        Pages[page.ID] = page;
+    }
+
+    public void RemovePage(int pageID) {
+        Pages.Remove(pageID);
+    }
+
+    public void AddPageURL(string URL, int pageID) {
+        if (string.IsNullOrWhiteSpace(URL)) {
+            throw new ArgumentException("URL must be specified!");
+        }
+        URLs[URL] = pageID;
+    }
+
+    public void RemovePageURL(string URL) {
+        URLs.Remove(URL);
+    }
+
+    public void AddPageWebsite(string website, int pageID) {
+        if (string.IsNullOrWhiteSpace(website)) {
+            throw new ArgumentException("Website must be specified!");
         }
 
-        if (!Locations.TryGetValue(location, out var set)) {
-            set = new HashSet<int>();
-            Locations[location] = set;
+        if (!WebsiteToPages.TryGetValue(website, out var set)) {
+            set = [];
+            WebsiteToPages[website] = set;
         }
-        set.Add(fileID);
+        set.Add(pageID);
     }
 
-    public void RemoveFileLocation(string location, int fileID) {
-        if (Locations.TryGetValue(location, out var set)) {
-            set.Remove(fileID);
+    public void RemovePageWebsite(string website, int pageID) {
+        if (WebsiteToPages.TryGetValue(website, out var set)) {
+            set.Remove(pageID);
             if (set.Count == 0) {
-                Locations.Remove(location);
+                WebsiteToPages.Remove(website);
             }
         }
     }
 
-    public void AddFileFilename(string filename, int fileID) {
-        if (string.IsNullOrEmpty(filename)) {
-            throw new ArgumentException("Filename must be specified!");
+    public void AddPageName(string name, int pageID) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            throw new ArgumentException("Page name must be specified!");
         }
 
-        if (!Filenames.TryGetValue(filename, out var set)) {
-            set = new HashSet<int>();
-            Filenames[filename] = set;
+        if (!NameToPages.TryGetValue(name, out var set)) {
+            set = [];
+            NameToPages[name] = set;
         }
-        set.Add(fileID);
+        set.Add(pageID);
     }
 
-    public void RemoveFileFilename(string filename, int fileID) {
-        if (Filenames.TryGetValue(filename, out var set)) {
-            set.Remove(fileID);
+    public void RemovePageName(string name, int pageID) {
+        if (NameToPages.TryGetValue(name, out var set)) {
+            set.Remove(pageID);
             if (set.Count == 0) {
-                Filenames.Remove(filename);
+                NameToPages.Remove(name);
             }
         }
     }
 
-    public void AddFileExtension(string extension, int fileID) {
-        if (string.IsNullOrEmpty(extension)) {
-            throw new ArgumentException("File extension must be specified!");
-        }
-
-        if (!Extensions.TryGetValue(extension, out var set)) {
-            set = new HashSet<int>();
-            Extensions[extension] = set;
-        }
-        set.Add(fileID);
-    }
-
-    public void RemoveFileExtension(string extension, int fileID) {
-        if (Extensions.TryGetValue(extension, out var set)) {
-            set.Remove(fileID);
-            if (set.Count == 0) {
-                Extensions.Remove(extension);
-            }
-        }
-    }
-
-    public void AddFileTimestamp(string timestamp, int fileID) {
-        if (string.IsNullOrEmpty(timestamp)) {
-            throw new ArgumentException("File timestamp must be specified!");
-        }
-
-        if (!Timestamps.TryGetValue(timestamp, out var set)) {
-            set = new HashSet<int>();
-            Timestamps[timestamp] = set;
-        }
-        set.Add(fileID);
-    }
-
-    public void RemoveFileTimestamp(string timestamp, int fileID) {
-        if (Timestamps.TryGetValue(timestamp, out var set)) {
-            set.Remove(fileID);
-            if (set.Count == 0) {
-                Timestamps.Remove(timestamp);
-            }
-        }
-    }
-
-    public void AddFileSize(long size, int fileID) {
-        if (size < 0) {
-            throw new ArgumentException("Size must not be negative!");
-        }
-
-        if (!Sizes.TryGetValue(size, out var set)) {
-            set = new HashSet<int>();
-            Sizes[size] = set;
-        }
-        set.Add(fileID);
-    }
-
-    public void RemoveFileSize(long size, int fileID) {
-        if (Sizes.TryGetValue(size, out var set)) {
-            set.Remove(fileID);
-            if (set.Count == 0) {
-                Sizes.Remove(size);
-            }
-        }
-    }
-
-    public void AddFileChecksum(int checksum, int fileID) {
-        if (!Checksums.TryGetValue(checksum, out var set)) {
-            set = new HashSet<int>();
-            Checksums[checksum] = set;
-        }
-        set.Add(fileID);
-    }
-
-    public void RemoveFileChecksum(int checksum, int fileID) {
-        if (Checksums.TryGetValue(checksum, out var set)) {
-            set.Remove(fileID);
-            if (set.Count == 0) {
-                Checksums.Remove(checksum);
-            }
-        }
-    }
-
-    public void AddFileKeyword(string keyword, int fileID) {
-        if (string.IsNullOrEmpty(keyword)) {
+    public void AddPageKeyword(string keyword, int pageID) {
+        if (string.IsNullOrWhiteSpace(keyword)) {
             throw new ArgumentException("Keyword must be specified!");
         }
 
         string key = keyword.ToUpper();
-        if (!Keywords.TryGetValue(key, out var set)) {
-            set = new HashSet<int>();
-            Keywords[key] = set;
+        if (!KeywordToPages.TryGetValue(key, out var set)) {
+            set = [];
+            KeywordToPages[key] = set;
         }
-        set.Add(fileID);
+        set.Add(pageID);
     }
 
-    public void RemoveFileKeyword(string keyword, int fileID) {
+    public void RemovePageKeyword(string keyword, int pageID) {
         string key = keyword.ToUpper();
-        if (Keywords.TryGetValue(key, out var set)) {
-            set.Remove(fileID);
+        if (KeywordToPages.TryGetValue(key, out var set)) {
+            set.Remove(pageID);
             if (set.Count == 0) {
-                Keywords.Remove(key);
-            }
-        }
-    }
-    public void AddFileMetadataTag(string metadataTag, int fileID) {
-        if (string.IsNullOrEmpty(metadataTag)) {
-            throw new ArgumentException("Metadata tag must be specified!");
-        }
-
-        if (!MetadataTags.TryGetValue(metadataTag, out var set)) {
-            set = new HashSet<int>();
-            MetadataTags[metadataTag] = set;
-        }
-        set.Add(fileID);
-    }
-
-    public void RemoveFileMetadataTag(string metadataTag, int fileID) {
-        if (MetadataTags.TryGetValue(metadataTag, out var set)) {
-            set.Remove(fileID);
-            if (set.Count == 0) {
-                MetadataTags.Remove(metadataTag);
+                KeywordToPages.Remove(key);
             }
         }
     }
 
-    public int GetFileID(string fullpath) {
-        return Fullpaths.TryGetValue(fullpath, out var id) ? id : 0;
-    }
-
-    public int GetFileID(string location, string filename, string extension) {
-        var filenameIDs = Filenames.TryGetValue(filename, out var set1) ? set1 : new HashSet<int>();
-        var locationIDs = Locations.TryGetValue(location, out var set2) ? set2 : new HashSet<int>();
-        var extensionIDs = Extensions.TryGetValue(extension, out var set3) ? set3 : new HashSet<int>();
-
-        foreach (var fileID in filenameIDs) {
-            if (locationIDs.Contains(fileID) && extensionIDs.Contains(fileID))
-                return fileID;
+    // Add or update a starting point information
+    // Returns true if it was added, or false if it was updated
+    public bool AddStartingPoint(StartingPoint sp) {
+        bool added = true;
+        if (string.IsNullOrWhiteSpace(sp.Name)) {
+            throw new ArgumentException("Starting Point name must be specified!");
         }
-
-        return 0;
-    }
-
-    public HashSet<int> FindPotentialDuplicatesIDs(long size, int checksum) {
-        var foundIDs = new HashSet<int>();
-        var sizeIDs = Sizes.TryGetValue(size, out var set1) ? set1 : new HashSet<int>();
-        var checksumIDs = Checksums.TryGetValue(checksum, out var set2) ? set2 : new HashSet<int>();;
-
-        foreach (var fileID in sizeIDs) {
-            if (checksumIDs.Contains(fileID)) {
-                foundIDs.Add(fileID);
-            }
+        string name = sp.Name.ToUpper();
+        if (SPNames.ContainsKey(name)) {
+            added = false;
         }
-
-        return foundIDs;
+        SPNames[name] = sp;
+        return added;
     }
 
-    public HashSet<int>? GetFileIDsInLocation(string location) {
-        return Locations.TryGetValue(location, out var set) ? set : null;
-    }
-
-    public HashSet<int>? GetFileIDsWithKeyword(string keyword) { 
-        return Keywords.TryGetValue(keyword.ToUpper(), out var set) ? set : null;
-    }
-
-    public void AddDuplicate(int duplicateFileID) {
-        if (duplicateFileID <= 0) {
-            throw new ArgumentException("Duplicate file ID must be positive!");
+    // Removes a starting point
+    // Returns true if it was removed, or false if starting point was not found
+    public bool RemoveStartingPoint(string spName) {
+        if (string.IsNullOrWhiteSpace(spName)) {
+            throw new ArgumentException("Starting Point name must be specified!");
         }
-        Duplicates.Add(duplicateFileID);
+        return SPNames.Remove(spName.ToUpper());
     }
 
-    public void RemoveDuplicate(int duplicateFileID) { 
-        Duplicates.Remove(duplicateFileID);
-    }
-
-    public void AddPotentialDuplicate(int potentialDuplicateFileID) {
-        if (potentialDuplicateFileID <= 0) {
-            throw new ArgumentException("Potential duplicate file ID must be positive!");
+    // Add or update a keyword
+    // Returns the old keyword if it was updated, or null if it was added
+    public string? AddKeyword(string keyword) {
+        if (string.IsNullOrWhiteSpace(keyword)) {
+            throw new ArgumentException("Keyword must be specified!");
         }
-        PotentialDuplicates.Add(potentialDuplicateFileID);
+        string key = keyword.ToUpper();
+        Keywords.TryGetValue(key, out string? oldKeyword);
+        if (oldKeyword == null || oldKeyword != keyword) {
+            Keywords[key] = keyword;
+        }
+        return oldKeyword;
     }
 
-    public void RemovePotentialDuplicate(int potentialDuplicateFileID) {
-        PotentialDuplicates.Remove(potentialDuplicateFileID);
+    // Removes a keyword
+    // Returns the old keyword if it was updated, or null if keyword was not found
+    public string? RemoveKeyword(string keyword) {
+        if (string.IsNullOrWhiteSpace(keyword)) {
+            throw new ArgumentException("Keyword must be specified!");
+        }
+        string key = keyword.ToUpper();
+        Keywords.TryGetValue(key, out string? oldKeyword);
+        if (oldKeyword != null) {
+            Keywords.Remove(key);
+        }
+        return oldKeyword;
+    }
+
+    public int GetPageID(string URL) {
+        return URLs.TryGetValue(URL, out var id) ? id : 0;
+    }
+
+    public HashSet<int>? GetPageIDsOnWebsite(string website) {
+        return WebsiteToPages.TryGetValue(website, out var set) ? set : null;
+    }
+
+    public HashSet<int>? GetPageIDsWithKeyword(string keyword) { 
+        return KeywordToPages.TryGetValue(keyword.ToUpper(), out var set) ? set : null;
     }
 
     public Dictionary<string, int> GetDBStatistics() {
-        var dbStatistics = new Dictionary<string, int>();
-        dbStatistics.Add("FILES", Files.Count);
-        dbStatistics.Add("DIRS", Locations.Count);
-        dbStatistics.Add("KEYS", Keywords.Count);
-        dbStatistics.Add("DUPS", Duplicates.Count);
-        dbStatistics.Add("DUP?S", PotentialDuplicates.Count);
+        var dbStatistics = new Dictionary<string, int>
+        {
+            { "NAMES", SPNames.Count },
+            { "KEYS", Keywords.Count },
+            { "WEBSITES", WebsiteToPages.Count },
+            { "PAGES", Pages.Count },
+        };
         return dbStatistics;
    }
 }

@@ -1,16 +1,14 @@
-namespace PhotoController;
+namespace SpiderController;
 
-using PhotoStatus;
-using PhotoDB;
-using PhotoView;
+using SpiderStatus;
+using SpiderDB;
+using SpiderView;
 
 public class Controller {
-    private View View { get; set; }
     private DB Db { get; set; }
     private CmdInterpreter Interpreter { get; set; }
 
     public Controller(string[] args) {
-        View = new View();
         View.FullProgramInfo();
 
         string dbFilename = GetFilename(args);
@@ -33,10 +31,10 @@ public class Controller {
         View.Print("");
         View.PrintDBStatistics(Db.GetDBStatistics());
 
-        Interpreter = new CmdInterpreter(Db, View);
+        Interpreter = new CmdInterpreter(Db);
     }
 
-    private string GetFilename(string[] args) {
+    static private string GetFilename(string[] args) {
         string fileName;
 
         if (args.Length == 0) {
@@ -56,11 +54,10 @@ public class Controller {
     public void Run() {
         View.Print("");
 
-        Interpreter.Cli = new CLI();
         bool quit = false;
         while (!quit) {
             View.PrintPrompt();
-            Command cmd = Interpreter.Cli.ReadCommand();
+            Command cmd = CLI.ReadCommand();
             Interpreter.ExecuteCommand(cmd);
             quit = Interpreter.QuitSignal;
         }
