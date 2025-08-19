@@ -30,7 +30,7 @@ public static class WebCrawler {
             var (url, internalLeft, externalLeft, name) = queue.Dequeue(); // dequeue next URL
 
             if (result.VisitedUrls.Contains(url)) { // if URL is already visited, skip it
-                View.Print("Link already visited: " + url);
+                View.Print("Already visited link, skip it: " + url);
                 View.Print("    Remaining links: " + queue.Count);
                 continue;
             }
@@ -45,14 +45,14 @@ public static class WebCrawler {
             string? page = await FetchPageAsync(url); // fetch page content
 
             if (page == null) { // if page could not be fetched, skip it
-                View.Print("    Page could not be fetched. Skipping.");
+                View.Print("    Page could not be fetched, skip it.");
                 continue;
             }
 
             // Keyword match
             var foundKeywords = FindKeywords(page, keywords);
             if (foundKeywords.Count > 0) {
-                View.Print("    Found keywords: " + string.Join(", ", foundKeywords));
+                View.Print("    Keywords found: " + string.Join(", ", foundKeywords));
                 result.UrlToKeywords[url] = (foundKeywords, name); 
             }
             foreach (var keyword in foundKeywords) {
@@ -61,12 +61,12 @@ public static class WebCrawler {
                     result.KeywordToUrls[keyword] = value; // add the Set to the dictionary
                 }
                 value.urlSet.Add(url); // add the current URL to the Set
-                //Console.WriteLine("    Found keyword: '" + keyword + "'");
             }
 
             // Link extraction
             foreach (var link in ExtractAbsoluteLinks(page, url)) {
                 if (result.VisitedUrls.Contains(link)) { // if URL is already visited, skip it
+                    View.Print("    Already visited link found, skip it: " + link);
                     continue;
                 }
 

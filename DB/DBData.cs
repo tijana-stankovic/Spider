@@ -26,6 +26,17 @@ public class DBData {
                                                                    // keyword.upper() -> the original keyword entered by the user
     public Dictionary<string, StartingPoint> SPNames { get; set; } = []; // starting point names
 
+    // Log parameters
+    public enum LogLevel {
+        Low,
+        Medium,
+        High,
+        Always
+    }
+    public string LogFileName { get; set; } = "spider_log.txt";
+    public bool LogActive { get; set; } = true;
+    public LogLevel CurrentLogLevel { get; set; } = LogLevel.Medium;
+
     public int NextPageID() {
         LastPageID++;
         return LastPageID;
@@ -75,6 +86,7 @@ public class DBData {
         return websites;
     }
 
+    // return 
     public DBPage? GetPage(int pageID) {
         return Pages.TryGetValue(pageID, out var file) ? file : null;
     }
@@ -91,11 +103,11 @@ public class DBData {
         if (string.IsNullOrWhiteSpace(URL)) {
             throw new ArgumentException("URL must be specified!");
         }
-        URLs[URL] = pageID;
+        URLs[URL.ToLower()] = pageID;
     }
 
     public void RemovePageURL(string URL) {
-        URLs.Remove(URL);
+        URLs.Remove(URL.ToLower());
     }
 
     public void AddPageWebsite(string website, int pageID) {
@@ -103,18 +115,18 @@ public class DBData {
             throw new ArgumentException("Website must be specified!");
         }
 
-        if (!WebsiteToPages.TryGetValue(website, out var set)) {
+        if (!WebsiteToPages.TryGetValue(website.ToLower(), out var set)) {
             set = [];
-            WebsiteToPages[website] = set;
+            WebsiteToPages[website.ToLower()] = set;
         }
         set.Add(pageID);
     }
 
     public void RemovePageWebsite(string website, int pageID) {
-        if (WebsiteToPages.TryGetValue(website, out var set)) {
+        if (WebsiteToPages.TryGetValue(website.ToLower(), out var set)) {
             set.Remove(pageID);
             if (set.Count == 0) {
-                WebsiteToPages.Remove(website);
+                WebsiteToPages.Remove(website.ToLower());
             }
         }
     }
@@ -124,18 +136,18 @@ public class DBData {
             throw new ArgumentException("Page name must be specified!");
         }
 
-        if (!NameToPages.TryGetValue(name, out var set)) {
+        if (!NameToPages.TryGetValue(name.ToUpper(), out var set)) {
             set = [];
-            NameToPages[name] = set;
+            NameToPages[name.ToUpper()] = set;
         }
         set.Add(pageID);
     }
 
     public void RemovePageName(string name, int pageID) {
-        if (NameToPages.TryGetValue(name, out var set)) {
+        if (NameToPages.TryGetValue(name.ToUpper(), out var set)) {
             set.Remove(pageID);
             if (set.Count == 0) {
-                NameToPages.Remove(name);
+                NameToPages.Remove(name.ToUpper());
             }
         }
     }
@@ -202,25 +214,24 @@ public class DBData {
     }
 
     // Removes a keyword
-    // Returns the old keyword if it was updated, or null if keyword was not found
-    public string? RemoveKeyword(string keyword) {
+    // Returns true if it was removed, otherwise false
+    public bool RemoveKeyword(string keyword) {
         if (string.IsNullOrWhiteSpace(keyword)) {
             throw new ArgumentException("Keyword must be specified!");
         }
-        string key = keyword.ToUpper();
-        Keywords.TryGetValue(key, out string? oldKeyword);
-        if (oldKeyword != null) {
-            Keywords.Remove(key);
-        }
-        return oldKeyword;
+        return Keywords.Remove(keyword.ToUpper());
     }
 
     public int GetPageID(string URL) {
-        return URLs.TryGetValue(URL, out var id) ? id : 0;
+        return URLs.TryGetValue(URL.ToLower(), out var id) ? id : 0;
     }
 
-    public HashSet<int>? GetPageIDsOnWebsite(string website) {
-        return WebsiteToPages.TryGetValue(website, out var set) ? set : null;
+    public HashSet<int>? GetPageIDsFromWebsite(string website) {
+        return WebsiteToPages.TryGetValue(website.ToLower(), out var set) ? set : null;
+    }
+
+    public HashSet<int>? GetPageIDsWithName(string name) {
+        return NameToPages.TryGetValue(name.ToUpper(), out var set) ? set : null;
     }
 
     public HashSet<int>? GetPageIDsWithKeyword(string keyword) { 

@@ -79,6 +79,10 @@ public class CmdInterpreter(DB db) {
                 Scan(cmd.Args);
                 break;
 
+            case "SCANK":
+                ScanKeywords(cmd.Args);
+                break;
+
             default:
                 StatusCode = StatusCode.UnknownCommand;
                 View.PrintStatus(StatusCode);
@@ -195,7 +199,12 @@ public class CmdInterpreter(DB db) {
         }
 
         string name = args[0];
+
         string url = args[1];
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
+            url = "https://" + url;
+        }
+
         if (!int.TryParse(args[2], out int internalDepth) || internalDepth < 0) {
             View.Print("ERROR: Internal depth must be a non-negative integer.");
             return;
@@ -263,9 +272,7 @@ public class CmdInterpreter(DB db) {
         }
 
         string keyword = args[0];
-        string? oldKeyword = Db.RemoveKeyword(keyword);
-
-        if (oldKeyword != null) {
+        if (Db.RemoveKeyword(keyword)) {
             View.Print($"Keyword '{keyword}' has been removed from the database!");
         } else {
             View.Print($"Keyword '{keyword}' was not found in the database!");
@@ -347,36 +354,257 @@ public class CmdInterpreter(DB db) {
     }
 
     private void Scan(string[] args) {
-        View.Print("The web crawling process has started.");
+        if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORDS" || args[0].ToUpper() == "KEYS")) {
+            ScanKeywords(args[1..]);
+            return;
+        }
 
+        if (args.Length > 2) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        List<string>? names = null;
+        List<string>? keywords = null;
+        bool stop = false;
+        if (args.Length > 0) {
+            names = CreateListOfStrings(args[0], 'N', out stop); // create list of names from the first argument
+        }
+        if (!stop && args.Length > 1) {
+            keywords = CreateListOfStrings(args[1], 'K', out stop); // create list of keywords from the second argument
+        }
+
+        if (!stop) {
+            Scan(names, keywords);
+        } else {
+            View.Print("Scanning aborted.");
+        }
+    }
+
+    // create list of strings from a comma-separated string of values
+    // removes duplicates and values not found in the database
+    // if result is empty list, return null
+    private List<string>? CreateListOfStrings(string input, char namesOrKeywords, out bool stop) {
+        List<string> result = new List<string>();
+        stop = false;
+
+        if (string.IsNullOrWhiteSpace(input)) {
+            return null;
+        }
+
+        // convert input string to list of values (remove duplicates)
+        result = input.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries) // split input string on commas
+                      .Select(s => s.Trim()) // remove leading and trailing whitespace
+                      .Where(s => !string.IsNullOrWhiteSpace(s)) // remove empty values
+                      .GroupBy(s => s.ToUpper()) // group by uppercase version
+                      .Select(g => g.First()) // select first item from each group (keep original casing)
+                      .ToList(); // convert to list
+
+        List<string> allSpecifiedItems = new List<string>(result); // remember all distinct specified items
+
+        // removes all specified items that do not exist in GetKeywords() or GetSPNames()
+        List<string> existingItems;
+        if (namesOrKeywords == 'K') {
+            existingItems = Db.GetKeywords();
+        } else if (namesOrKeywords == 'N') {
+            existingItems = Db.GetSPNames();
+        } else { // it should not reach here
+            existingItems = [];
+        }
+        existingItems = existingItems.Select(s => s.ToUpper()).ToList();
+
+        result.RemoveAll(item => !existingItems.Contains(item.ToUpper())); // this is a final result
+
+        // if some items were removed
+        if (allSpecifiedItems.Count != result.Count) {
+            // find list of removed items
+            List<string> removedItems = allSpecifiedItems.Except(result, StringComparer.OrdinalIgnoreCase).ToList();
+
+            View.Print($"Warning ! Some of the specified { (namesOrKeywords == 'K' ? "keywords" : "starting points")} are not found in the database!");
+            if (namesOrKeywords == 'K') {
+                View.Print($"   Unknown keywords: {string.Join(", ", removedItems)}");
+                char response = CLI.AskYesNo("   Do you want to add them automatically?", false); // no CANCEL option
+                switch (response) {
+                    case 'Y':
+                        foreach (var keyword in removedItems) {
+                            Db.AddKeyword(keyword);
+                            result.Add(keyword);
+                        }
+                        break;
+
+                    case 'N':
+                        stop = true;
+                        break;
+                }
+
+            } else if (namesOrKeywords == 'N') {
+                View.Print($"   Undefined starting points: {string.Join(", ", removedItems)}");
+                View.Print("   Please define them before using.");
+                stop = true;
+            }
+        }
+
+        if (result.Count == 0) {
+            return null;
+        }
+
+        return result;
+    }
+
+    private void ScanKeywords(string[] args) {
+        if (args.Length > 2) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        if (args.Length > 2) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        List<string>? names = null;
+        List<string>? keywords = null;
+        bool stop = false;
+        if (args.Length > 0) {
+            keywords = CreateListOfStrings(args[0], 'K', out stop); // create list of keywords from the first argument
+        }
+        if (!stop && args.Length > 1) {
+            names = CreateListOfStrings(args[1], 'N', out stop); // create list of names from the second argument
+        }
+
+        if (!stop) {
+            Scan(names, keywords);
+        } else {
+            View.Print("Scanning aborted.");
+        }
+    }
+
+    // customNames, customKeywords = user specified set of names and/or keywords
+    private void Scan(List<string>? customNames, List<string>? customKeywords) {
+        View.LogOpen();
+
+        View.LogPrint(View.FullLine);
+        View.Print("Terms that will be used during the scanning process:");
+        if (customNames == null) {
+            View.Print($"   Names: (ALL)");
+        } else {
+            View.Print($"   Names: {string.Join(", ", customNames)}");
+        }
+        if (customKeywords == null) {
+            View.Print($"   Keywords: (ALL)");
+        } else {
+            View.Print($"   Keywords: {string.Join(", ", customKeywords)}");
+        }
+
+        List<string> names;
+        if (customNames == null) {
+            names = Db.GetSPNames();
+        } else {
+            names = customNames;
+        }
         List<StartingPoint> startingPoints = [];
-        foreach (string spName in Db.GetSPNames())
-        {
+        foreach (string spName in names) {
             StartingPoint? sp = Db.GetStartingPoint(spName);
             if (sp != null) {
                 startingPoints.Add(sp);
             }
         }
 
-        var keywords = Db.GetKeywords();
+        List<string> keywords;
+        if (customKeywords == null) {
+            keywords = Db.GetKeywords();
+        } else {
+            keywords = customKeywords;
+        }
 
-        // CrawlResult result = await WebCrawler.CrawlAsync(startingPoints, keywords);
+        View.LogPrint(View.FullLine);
+        View.Print();
+        View.Print("The web crawling process has started.");
+        View.Print();
+
+        // Start crawling
         CrawlResult result = WebCrawler.CrawlAsync(startingPoints, keywords).GetAwaiter().GetResult();
 
-        View.Print("");
+        View.Print();
         View.Print("The web crawling process has finished.");
-        View.Print("");
-        View.Print("Crawling results:");
-        foreach (var url in result.UrlToKeywords) {
-            Console.WriteLine($"URL: {url.Key}");
-            Console.WriteLine($"    Starting point: {url.Value.spName}");
-            Console.WriteLine($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
-        }
-        foreach (var keyword in result.KeywordToUrls) {
-            Console.WriteLine($"Keyword: {keyword.Key}");
-            foreach (var matchUrl in keyword.Value.urlSet) {
-                Console.WriteLine($"    -> {matchUrl}");
+        View.Print();
+        View.LogPrint(View.FullLine);
+
+        // removes all existing page/keywords connection for specified starting points and keywords
+        // (new page/keywords connections will be added later)
+        var count = names.Count * keywords.Count;
+        if (count > 0) {
+            View.Print($"Clearing the obsolete page/keywords connections from the database: {0}/{count}", false);
+            int num = 0;
+            foreach (string spName in names) {
+                foreach (string keyword in keywords) {
+                    View.Print($"\rClearing the obsolete page/keywords connections from the database: {++num}/{count}", false);
+                    var pageIDs = GetCommonPageIDs(spName, keyword);
+                    foreach (var pageID in pageIDs) {
+                        Db.RemovePageKeywordConnection(keyword, pageID);
+                    }
+                }
             }
-        }        
+            View.Print($"\rClearing the obsolete page/keywords connections from the database... completed successfully.");
+        }
+
+        // create new page/keywords connections in the database based on result.UrlToKeywords
+        var pageCount = result.UrlToKeywords.Count;
+        if (pageCount > 0) {
+            View.Print($"Creating new page/keywords connections in the database: {0}/{pageCount}", false);
+
+            int pageNum = 0;
+            foreach (var url in result.UrlToKeywords) { // for all found URLs
+                View.Print($"\rCreating new page/keywords connections in the database: {++pageNum}/{pageCount}", false);
+                var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
+                                                       // create new page
+                DBPage page = new() {
+                    Name = spName,
+                    URL = url.Key,
+                    Website = WebCrawler.GetBaseDomain(url.Key),
+                    Keywords = keywordsSet
+                };
+
+                Db.AddPage(page); // add page to the database
+            }
+            View.Print($"\rCreating new page/keywords connections in the database: {pageCount}/{pageCount} ... completed successfully.");
+        } else {
+            View.Print("No page/keywords connections found.");
+        }
+
+        // View.Print();
+        // View.Print("Crawling results:");
+        // foreach (var url in result.UrlToKeywords) {
+        //     Console.WriteLine($"URL: {url.Key}");
+        //     Console.WriteLine($"    Starting point: {url.Value.spName}");
+        //     Console.WriteLine($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
+        // }
+        // foreach (var keyword in result.KeywordToUrls) {
+        //     Console.WriteLine($"Keyword: {keyword.Key}");
+        //     foreach (var matchUrl in keyword.Value.urlSet) {
+        //         Console.WriteLine($"    -> {matchUrl}");
+        //     }
+        // }        
+        View.LogPrint(View.FullLine);
+
+        View.LogClose();
+    }
+
+    // returns the set of common page IDs for a given name and keyword
+    public HashSet<int> GetCommonPageIDs(string name, string keyword) {
+        var namePages = Db.GetPageIDsWithName(name);
+        var keywordPages = Db.GetPageIDsWithKeyword(keyword);
+
+        if (namePages == null || keywordPages == null) {
+            return [];
+        }
+
+        var intersection = new HashSet<int>(namePages);
+        intersection.IntersectWith(keywordPages);
+
+        return intersection;
     }
 }

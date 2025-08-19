@@ -28,7 +28,7 @@ public class Controller {
                 break;
         }
 
-        View.Print("");
+        View.Print();
         View.PrintDBStatistics(Db.GetDBStatistics());
 
         Interpreter = new CmdInterpreter(Db);
@@ -52,7 +52,7 @@ public class Controller {
     }
 
     public void Run() {
-        View.Print("");
+        View.Print();
 
         bool quit = false;
         while (!quit) {

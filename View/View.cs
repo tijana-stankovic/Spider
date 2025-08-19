@@ -1,32 +1,21 @@
 namespace SpiderView;
 
 using SpiderStatus;
+using SpiderDB;
 using System;
 using System.Collections.Generic;
 
 public class View {
-    static public void FullProgramInfo() {
-        string version = "1.0";
-        string projectName = "Spider";
-        string course = "Searching the Web - NDBI038 - student project";
-        string author = "Tijana Stankovic";
-        string email = "tijana.stankovic@gmail.com";
-        string university = "Charles University, Faculty of Mathematics and Physics";
+    public static string LogFileName { get; set; } = "spider_log.txt";
+    public static bool LogActive { get; set; } = true;
+    public static DBData.LogLevel CurrentLogLevel { get; set; } = DBData.LogLevel.Medium;
 
-        Console.WriteLine();
-        Console.WriteLine(projectName + " [v " + version + "]");
-        Console.WriteLine(course);
-        Console.WriteLine("(c) " + author + ", " + email);
-        Console.WriteLine(university);
-        Console.WriteLine();
-    }
+    private static StreamWriter? _logWriter = null;
 
-    static public void PrintPrompt() {
-        string prompt = "> ";
-        Console.Write(prompt);
-    }
+    public static string FullLine { get; } = "--------------------------------------------------------------------------------";
+    public static string FullDoubleLine { get; } = "================================================================================";
 
-    static public void Print(string line) {
+    static public void Print(string line = "") {
         Console.WriteLine(line);
     }
 
@@ -38,8 +27,29 @@ public class View {
         }
     }
 
+    static public void FullProgramInfo() {
+        string version = "1.0";
+        string projectName = "Spider";
+        string course = "Searching the Web - NDBI038 - student project";
+        string author = "Tijana Stankovic";
+        string email = "tijana.stankovic@gmail.com";
+        string university = "Charles University, Faculty of Mathematics and Physics";
+
+        Print();
+        Print(projectName + " [v " + version + "]");
+        Print(course);
+        Print("(c) " + author + ", " + email);
+        Print(university);
+        Print();
+    }
+
+    static public void PrintPrompt() {
+        string prompt = "> ";
+        Print(prompt, false);
+    }
+
     static public void PrintStatus(StatusCode statusCode) {
-        Console.WriteLine(StatusMessages.GetStatusMessage(statusCode));
+        Print(StatusMessages.GetStatusMessage(statusCode));
     }
 
     static public void PrintDBStatistics(Dictionary<string, int> dbStatistics) {
@@ -64,5 +74,41 @@ public class View {
         } else {
             Print("   - Number of keywords: 0 (use 'AK' command to add keywords to the database)");
         }
+    }
+
+    public static void LogOpen() {
+        if (_logWriter == null) {
+            _logWriter = new StreamWriter(LogFileName, append: true);
+            LogPrint(FullDoubleLine);
+            LogPrint("Log opened at " + DateTime.Now);
+        }
+    }
+
+    public static void LogClose() {
+        LogPrint("Log closed at " + DateTime.Now);
+        LogPrint(FullDoubleLine);
+        _logWriter?.Close();
+        _logWriter = null;
+    }
+
+    public static void LogClear() {
+        bool logWasOpen = _logWriter != null;
+
+        if (logWasOpen) {
+            LogClose();
+        }
+
+        File.WriteAllText(LogFileName, string.Empty); // clear the file
+
+        if (logWasOpen) {
+            LogOpen();
+        }
+    }
+
+    public static void LogPrint( string message, bool printToConsole = false) { 
+        if (printToConsole) {
+            View.Print(message);
+        }
+        _logWriter?.WriteLine(message);
     }
 }

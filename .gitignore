@@ -3,3 +3,5 @@ obj/
 .vscode/
 # Spider database files
 *.sdb
+# Spider log
+spider_log.txt

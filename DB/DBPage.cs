@@ -67,7 +67,8 @@ public class DBPage {
 
     public HashSet<string> Keywords {
         get => _keywords;
-        set => _keywords = value ?? [];
+        // convert all keywords to uppercase
+        set => _keywords = new HashSet<string>(value.Select(k => k.ToUpper())) ?? [];
     }
 
     public void AddKeyword(string keyword) {

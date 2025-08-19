@@ -89,14 +89,14 @@ public class DB {
     }
 
     public int AddPage(DBPage page) {
-        var keywords = new HashSet<string>();
+        var existingKeywords = new HashSet<string>();
         int oldPageID = Data.GetPageID(page.URL);
 
         if (oldPageID != 0) {
             page.ID = oldPageID;
             var p = GetPage(oldPageID);
             if (p != null) {
-                keywords = p.Keywords;
+                existingKeywords = p.Keywords;
             }
             RemovePage(oldPageID);
         } else {
@@ -108,11 +108,14 @@ public class DB {
         Data.AddPageURL(page.URL, pageID);
         Data.AddPageWebsite(page.Website, pageID);
         Data.AddPageName(page.Name, pageID);
-
-        if (oldPageID != 0) {
-            foreach (var keyword in keywords) {
-                //AddKeyword(keyword, pageID);
-            }
+        // add new found keywords
+        foreach (var keyword in page.Keywords) {
+            Data.AddPageKeyword(keyword, pageID);
+        }
+        // add old keywords
+        foreach (var keyword in existingKeywords) {
+            page.AddKeyword(keyword);
+            Data.AddPageKeyword(keyword, pageID);
         }
 
         DataChanged = true;
@@ -134,6 +137,14 @@ public class DB {
         }
 
         DataChanged = true;
+    }
+
+    public void RemovePageKeywordConnection(string keyword, int pageID) {
+        var page = Data.GetPage(pageID);
+        if (page != null) {
+            page.RemoveKeyword(keyword);
+        }
+        Data.RemovePageKeyword(keyword, pageID);
     }
 
     public int NextPageID() { 
@@ -159,12 +170,16 @@ public class DB {
                 }
                 break;
             }
-            case 'S': {
-                pageIDs = Data.GetPageIDsOnWebsite(key);
-                break;
-            }
             case 'K': {
                 pageIDs = Data.GetPageIDsWithKeyword(key);
+                break;
+            }
+            case 'N': {
+                pageIDs = Data.GetPageIDsWithName(key);
+                break;
+            }
+            case 'W': {
+                pageIDs = Data.GetPageIDsFromWebsite(key);
                 break;
             }
             default: {
@@ -193,6 +208,14 @@ public class DB {
         //        u sustini, treba proci kroz NameToPages i za sve stranice povezane sa tim SP, treba ih ukloniti
         //        a to znaci da treba otici u DBPage za svaku od tih stranica i ukloniti url, website i keywords i na kraju samu stranicu
         if (Data.RemoveStartingPoint(spName)) {
+
+            var pageIDs = Data.GetPageIDsWithName(spName); // get all page IDs connected with this starting point
+            if (pageIDs != null) {
+                foreach (var pageID in pageIDs) { // remove all pages connected with this starting point
+                    RemovePage(pageID);
+                }
+            }
+
             DataChanged = true;
             return true;
         }
@@ -209,18 +232,32 @@ public class DB {
         return oldKeyword;
     }
 
-    // Removes a keyword
-    // Returns the old keyword if it was updated, or null if keyword was not found
-    public string? RemoveKeyword(string keyword) {
-        // TODO: ovo je kompleksnije - treba ukloniti i sve veze ovog keyworda sa svim stranicama
-        //       znaci ici kroz sve stranice koje su u KeywordToPages povezane sa ovom keyword
-        //       za svaku od tih stranica ukloniti keyword iz _keywords stranice,
-        //       pa na kraju ukloniti keyword i iz KeywordToPages
-        var oldKeyword = Data.RemoveKeyword(keyword);
-        if (oldKeyword != null) {
+    // Removes a keyword and all page/keyword connections
+    // Returns true if keyword is removed, otherwise false
+    public bool RemoveKeyword(string keyword) {
+
+        if (Data.RemoveKeyword(keyword)) { // remove keyword from database
+
+            var pageIDs = Data.GetPageIDsWithKeyword(keyword); // get all page IDs connected with this keyword
+            if (pageIDs != null) {
+                // remove all page/keyword connections from pages
+                foreach (var pageID in pageIDs) {
+                    var page = Data.GetPage(pageID);
+                    if (page != null) {
+                        if (page.Keywords.Count == 1) { // if this is the only keyword connected with this page
+                            RemovePage(pageID); // remove whole page from the database
+                        } else {
+                            page.RemoveKeyword(keyword); // remove only this keyword/page connection
+                        }
+                    }
+                }
+                Data.KeywordToPages.Remove(keyword.ToUpper()); // remove keyword from keyword-to-pages index 
+            }
+
             DataChanged = true;
+            return true;
         }
-        return oldKeyword;
+        return false;
     }
 
     // return a sorted list of all keywords in the database
@@ -248,17 +285,15 @@ public class DB {
         return Data.GetFoundWebsites(); 
     }
 
+    public HashSet<int>? GetPageIDsWithName(string name) {
+        return Data.GetPageIDsWithName(name);
+    }
+
+    public HashSet<int>? GetPageIDsWithKeyword(string keyword) { 
+        return Data.GetPageIDsWithKeyword(keyword);
+    }
+
     public Dictionary<string, int> GetDBStatistics() { 
         return Data.GetDBStatistics();
     }
-
-    // public void Test() {
-    //     DBPage page = new DBPage();
-    //     page.ID = 1;
-    //     page.Name = "Test Page";
-    //     page.URL = "http://www.test.com";
-    //     page.Website = "http://www.test.com";
-    //     page.Keywords = [];
-    //     Data.AddPage(page);
-    // }
 }
