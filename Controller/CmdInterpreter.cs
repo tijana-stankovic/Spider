@@ -192,7 +192,7 @@ public class CmdInterpreter(DB db) {
             return;
         }
 
-        if (args.Length != 4) {
+        if (args.Length < 4 || args.Length > 5) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
             View.PrintStatus(StatusCode);
             return;
@@ -213,8 +213,16 @@ public class CmdInterpreter(DB db) {
             View.Print("ERROR: External depth must be a non-negative integer.");
             return;
         }
+        string baseUrl = WebCrawler.GetBaseDomain(url); // default base URL value
+        if (args.Length == 5) { // if base URL is specified as parameter
+            baseUrl = args[4];
+        }
+        if (!baseUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
+            var prefix = new Uri(url).Scheme;
+            baseUrl = $"{prefix}://{baseUrl}";
+        }
 
-        StartingPoint sp = new(name, url, internalDepth, externalDepth);
+        StartingPoint sp = new(name, url, internalDepth, externalDepth, baseUrl);
 
         if (Db.AddStartingPoint(sp)) {
             View.Print($"Starting point '{name}' has been added to the database.");
@@ -333,7 +341,7 @@ public class CmdInterpreter(DB db) {
         foreach (string spName in Db.GetSPNames()) {
             StartingPoint? sp = Db.GetStartingPoint(spName);
             if (sp != null) {
-                View.Print($"   {spName} -> {sp.URL}");
+                View.Print($"   {spName} -> {sp.URL} [{sp.InternalDepth}/{sp.ExternalDepth}] {sp.baseURL}");
             } else {
                 View.Print($"   {spName} -> (not found)");
             }

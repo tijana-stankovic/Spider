@@ -20,18 +20,25 @@ public static class WebCrawler {
 
     public static async Task<CrawlResult> CrawlAsync(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
-        var queue = new Queue<(string url, int internalLeft, int externalLeft, string spName)>();
+        var queue = new Queue<(string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL)>();
 
         foreach (var sp in startingPoints) {
-            queue.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name));
+            queue.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name, sp.baseURL, sp.URL));
         }
 
         while (queue.Count > 0) {
-            var (url, internalLeft, externalLeft, name) = queue.Dequeue(); // dequeue next URL
+            var (url, internalLeft, externalLeft, name, baseUrl, spURL) = queue.Dequeue(); // dequeue next URL
 
             if (result.VisitedUrls.Contains(url)) { // if URL is already visited, skip it
                 View.Print("Already visited link, skip it: " + url);
                 View.Print("    Remaining links: " + queue.Count);
+                continue;
+            }
+
+            if (baseUrl != "" && !url.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
+                View.Print("URL doesn't match base URL, skip it: " + url);
+                View.Print("    Base URL: " + baseUrl);
+                View.Print("         URL: " + url);
                 continue;
             }
 
@@ -70,16 +77,28 @@ public static class WebCrawler {
                     continue;
                 }
 
-                string baseDomain = GetBaseDomain(url);
+                string baseDomain = GetBaseDomain(spURL);
                 string linkDomain = GetBaseDomain(link);
 
-                if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase) && internalLeft > 0) {
-                    Console.WriteLine("    Added new internal link: " + link);
-                    queue.Enqueue((link, internalLeft - 1, externalLeft, name));
-                }
-                else if (externalLeft > 0) {
-                    Console.WriteLine("    Added new external link: " + link);
-                    queue.Enqueue((link, internalLeft, externalLeft - 1, name));
+                if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) {
+                    if (internalLeft > 0) {
+                        if (baseUrl != "" && !link.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
+                            View.Print("        New internal link found, but skipped (URL doesn't match base URL): " + link);
+                            View.Print("    Base URL: " + baseUrl);
+                            View.Print("         URL: " + link);
+                        } else {
+                            View.Print("    New internal link found and added: " + link);
+                            queue.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
+                        }
+                    } else {
+                        View.Print("    New internal link found, but skipped (too far from the starting point): " + link);
+                    }
+                } else if (externalLeft > 0)
+                {
+                    View.Print("    New external link found and added: " + link);
+                    queue.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
+                } else {
+                    View.Print("    New external link found, but skipped (too far from the starting point): " + link);
                 }
             }
         }
