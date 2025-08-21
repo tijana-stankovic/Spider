@@ -83,6 +83,16 @@ public class CmdInterpreter(DB db) {
                 ScanKeywords(cmd.Args);
                 break;
 
+            case "CLEAR":
+            case "C":
+                Clear(cmd.Args);
+                break;
+
+            case "FIND":
+            case "F":
+                Find(cmd.Args);
+                break;
+
             default:
                 StatusCode = StatusCode.UnknownCommand;
                 View.PrintStatus(StatusCode);
@@ -614,5 +624,66 @@ public class CmdInterpreter(DB db) {
         intersection.IntersectWith(keywordPages);
 
         return intersection;
+    }
+
+    private void Clear(string[] args) {
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        if (Db.GetStartingPoint(args[0]) == null) {
+            View.Print($"The starting point named '{args[0]}' does not exist.");
+            return;
+        }
+
+        var spName = args[0];
+        var pageIDs = Db.GetPageIDsWithName(spName);
+        if (pageIDs != null) {
+            View.Print($"Deleting pages with the origin '{spName}'... ", false);
+            foreach (var pageID in pageIDs) {
+                Db.RemovePage(pageID);
+            }
+            View.Print("completed successfully.");
+        } else {
+            View.Print($"No pages found with the origin '{spName}'.");
+        }
+    }
+
+    private void Find(string[] args) {
+        if (args.Length != 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        var keyword = args[0];
+        if (!Db.GetKeywords().Contains(keyword.ToUpper(), StringComparer.OrdinalIgnoreCase)) {
+            View.Print($"The keyword '{keyword}' does not exist.");
+            return;
+        }
+
+        var pageIDs = Db.GetPageIDsWithKeyword(keyword);
+
+        if (pageIDs != null) {
+            List<string> pageUrls = [];
+
+            foreach (var pageID in pageIDs) {
+                var page = Db.GetPage(pageID);
+                if (page != null) {
+                    pageUrls.Add(page.URL);
+                }
+            }
+
+            pageUrls.Sort();
+
+            View.Print($"List of pages with the keyword '{keyword}'... ");
+            foreach (var url in pageUrls) {
+                View.Print($"   {url}");
+            }
+        } else {
+            View.Print($"No pages found with the keyword '{keyword}'.");
+        }
     }
 }
