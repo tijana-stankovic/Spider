@@ -4,6 +4,7 @@ public enum StatusCode {
     NoError,
     UnexpectedStatus,
     UnknownCommand,
+    UnknownLogCommand,
     DbFileDoesNotExist,
     DbFileIncompatibleFormat,
     DbFileReadError,

@@ -29,6 +29,8 @@ public class Controller {
         }
 
         View.Print();
+        View.LogPrintCurrentStatus();
+        View.Print();
         View.PrintDBStatistics(Db.GetDBStatistics());
 
         Interpreter = new CmdInterpreter(Db);
@@ -39,13 +41,13 @@ public class Controller {
 
         if (args.Length == 0) {
             fileName = DB.DefaultDbFilename;
-            View.Print("The default name of the DB file will be used: " + fileName);
+            View.Print("The default database file name will be used: " + fileName);
         } else {
             fileName = args[0];
             if (!fileName.Contains('.')) {
                 fileName += ".pdb";
             }
-            View.Print("The DB filename: " + fileName);
+            View.Print("The database file name: " + fileName);
         }
 
         return fileName;

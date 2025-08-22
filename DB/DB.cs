@@ -1,6 +1,7 @@
 namespace SpiderDB;
 
 using SpiderStatus;
+using SpiderView;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -65,6 +66,7 @@ public class DB {
             }
 
             Data = data;
+            RestoreLogParameters();
             DataChanged = false;
             StatusCode = StatusCode.NoError;
             
@@ -203,12 +205,8 @@ public class DB {
     // Removes a starting point
     // Returns true if it was removed, or false if starting point was not found
     public bool RemoveStartingPoint(string spName) {
-        // TODO:  ovde je kompleksnije - treba ukloniti i sve sto je povezano sa ovim starting point-om
-        //        dakle, sve stranice koje imaju veze sa tim SP, a kad se uklanjaju stranice, onda se uklanjaju i ostale veze
-        //        u sustini, treba proci kroz NameToPages i za sve stranice povezane sa tim SP, treba ih ukloniti
-        //        a to znaci da treba otici u DBPage za svaku od tih stranica i ukloniti url, website i keywords i na kraju samu stranicu
         if (Data.RemoveStartingPoint(spName)) {
-
+            
             var pageIDs = Data.GetPageIDsWithName(spName); // get all page IDs connected with this starting point
             if (pageIDs != null) {
                 foreach (var pageID in pageIDs) { // remove all pages connected with this starting point
@@ -295,5 +293,18 @@ public class DB {
 
     public Dictionary<string, int> GetDBStatistics() { 
         return Data.GetDBStatistics();
+    }
+
+    public void SaveLogParameters() {
+        Data.LogFileName = View.LogFileName;
+        Data.LogActive = View.LogActive;
+        Data.CurrentLogLevel = View.CurrentLogLevel;
+        DataChanged = true;
+    }
+
+    public void RestoreLogParameters() {
+        View.LogFileName = Data.LogFileName;
+        View.LogActive = Data.LogActive;
+        View.CurrentLogLevel = Data.CurrentLogLevel;
     }
 }

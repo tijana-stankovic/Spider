@@ -105,10 +105,18 @@ public class View {
         }
     }
 
-    public static void LogPrint( string message, bool printToConsole = false) { 
+    public static void LogPrint(string message = "", bool printToConsole = false, DBData.LogLevel logLevel = DBData.LogLevel.Low) { 
         if (printToConsole) {
             View.Print(message);
         }
-        _logWriter?.WriteLine(message);
+        if (LogActive && logLevel <= CurrentLogLevel) {
+            _logWriter?.WriteLine(message);
+        }
+    }
+
+    public static void LogPrintCurrentStatus() { 
+        Print($"Log filename: {LogFileName}");
+        Print($"Log status: {(LogActive ? "Active" : "Inactive")}");
+        Print($"Log details level: {CurrentLogLevel}");
     }
 }

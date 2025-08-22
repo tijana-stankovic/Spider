@@ -5,6 +5,7 @@ public class StatusMessages {
         { StatusCode.NoError, "No error." },
         { StatusCode.UnexpectedStatus, "WARNING: Unexpected program status." },
         { StatusCode.UnknownCommand, "ERROR: Unknown command. Use Help or H for a list of available commands." },
+        { StatusCode.UnknownLogCommand, "ERROR: Unknown LOG command. Use Help or H for a list of available commands." },
         { StatusCode.DbFileDoesNotExist, "WARNING: The database file does not exist. A new file will be created." },
         { StatusCode.DbFileIncompatibleFormat, "ERROR: The database file is in incompatible format." },
         { StatusCode.DbFileReadError, "ERROR: An error occurred while reading the database file." },

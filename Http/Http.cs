@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Linq;
 using SpiderView;
 
 public class CrawlResult {
@@ -20,46 +19,45 @@ public static class WebCrawler {
 
     public static async Task<CrawlResult> CrawlAsync(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
-        var queue = new Queue<(string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL)>();
+        var tasks = new Queue<(string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL)>();
 
         foreach (var sp in startingPoints) {
-            queue.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name, sp.baseURL, sp.URL));
+            tasks.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name, sp.baseURL, sp.URL));
         }
 
-        while (queue.Count > 0) {
-            var (url, internalLeft, externalLeft, name, baseUrl, spURL) = queue.Dequeue(); // dequeue next URL
+        while (tasks.Count > 0) {
+            var (url, internalLeft, externalLeft, name, baseUrl, spURL) = tasks.Dequeue(); // next URL
 
             if (result.VisitedUrls.Contains(url)) { // if URL is already visited, skip it
-                View.Print("Already visited link, skip it: " + url);
-                View.Print("    Remaining links: " + queue.Count);
+                View.LogPrint("Already visited link, skip it: " + url, false);
+                View.LogPrint("    Remaining links: " + tasks.Count, false, DBData.LogLevel.Medium);
                 continue;
             }
 
             if (baseUrl != "" && !url.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
-                View.Print("URL doesn't match base URL, skip it: " + url);
-                View.Print("    Base URL: " + baseUrl);
-                View.Print("         URL: " + url);
+                View.LogPrint("URL doesn't match base URL, skip it: " + url, false);
+                View.LogPrint("    Base URL: " + baseUrl, false, DBData.LogLevel.High);
+                View.LogPrint("    Remaining links: " + tasks.Count, false, DBData.LogLevel.Medium);
                 continue;
             }
 
-            View.Print("Crawling: " + url);
-            View.Print("    Remaining internal links: " + internalLeft);
-            View.Print("    Remaining external links: " + externalLeft);
-            View.Print("    Remaining links: " + queue.Count);
+            View.LogPrint("Crawling: " + url, true);
 
             result.VisitedUrls.Add(url);
 
+            // ************************************************************
             string? page = await FetchPageAsync(url); // fetch page content
+            // ************************************************************
 
             if (page == null) { // if page could not be fetched, skip it
-                View.Print("    Page could not be fetched, skip it.");
+                View.LogPrint("    Page could not be fetched, skip it.", false, DBData.LogLevel.Medium);
                 continue;
             }
 
             // Keyword match
             var foundKeywords = FindKeywords(page, keywords);
             if (foundKeywords.Count > 0) {
-                View.Print("    Keywords found: " + string.Join(", ", foundKeywords));
+                View.LogPrint("    Keywords found: " + string.Join(", ", foundKeywords), true);
                 result.UrlToKeywords[url] = (foundKeywords, name); 
             }
             foreach (var keyword in foundKeywords) {
@@ -71,9 +69,10 @@ public static class WebCrawler {
             }
 
             // Link extraction
+            int newInternalLinks = 0, newExternalLinks = 0;
             foreach (var link in ExtractAbsoluteLinks(page, url)) {
                 if (result.VisitedUrls.Contains(link)) { // if URL is already visited, skip it
-                    View.Print("    Already visited link found, skip it: " + link);
+                    View.LogPrint("    Already visited link found, skip it: " + link, false, DBData.LogLevel.Medium);
                     continue;
                 }
 
@@ -83,24 +82,32 @@ public static class WebCrawler {
                 if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) {
                     if (internalLeft > 0) {
                         if (baseUrl != "" && !link.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
-                            View.Print("        New internal link found, but skipped (URL doesn't match base URL): " + link);
-                            View.Print("    Base URL: " + baseUrl);
-                            View.Print("         URL: " + link);
+                            View.LogPrint("    New internal link found, but skipped (URL doesn't match base URL): " + link, false, DBData.LogLevel.Medium);
+                            View.LogPrint("    Base URL: " + baseUrl, false, DBData.LogLevel.High);
                         } else {
-                            View.Print("    New internal link found and added: " + link);
-                            queue.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
+                            View.LogPrint("    New internal link found and added: " + link, false, DBData.LogLevel.Medium);
+                            tasks.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
+                            newInternalLinks++;
                         }
                     } else {
-                        View.Print("    New internal link found, but skipped (too far from the starting point): " + link);
+                        View.LogPrint("    New internal link found, but skipped (too far from the starting point): " + link, false, DBData.LogLevel.Medium);
                     }
                 } else if (externalLeft > 0)
                 {
-                    View.Print("    New external link found and added: " + link);
-                    queue.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
+                    View.LogPrint("    New external link found and added: " + link, false, DBData.LogLevel.Medium);
+                    tasks.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
+                    newExternalLinks++;
                 } else {
-                    View.Print("    New external link found, but skipped (too far from the starting point): " + link);
+                    View.LogPrint("    New external link found, but skipped (too far from the starting point): " + link, false, DBData.LogLevel.Medium);
                 }
             }
+            if (newInternalLinks + newExternalLinks > 0) {
+                View.LogPrint($"    New links added: {newInternalLinks + newExternalLinks} (internal: {newInternalLinks}, external: {newExternalLinks})", true);
+            }
+
+            View.LogPrint("    Remaining links: " + tasks.Count, true, DBData.LogLevel.Medium);
+            View.LogPrint("    Remaining internal depth: " + internalLeft, false, DBData.LogLevel.High);
+            View.LogPrint("    Remaining external depth: " + externalLeft, false, DBData.LogLevel.High);
         }
 
         return result;
@@ -132,6 +139,12 @@ public static class WebCrawler {
     }
 
     public static IEnumerable<string> ExtractAbsoluteLinks(string page, string baseUrl) {
+        // Regex search in 'page' for all links (href attributes) in the form of: href="something"
+        //      - href          the word 'href'
+        //      - \s*=\s*       an equals sign '=' (possibly surrounded by any amount of whitespace)
+        //      - ["']          either a double quote " or single quote '
+        //      - ([^""']+)     one or more characters that are not quotes (actual URL)
+        //      - ["']          the closing quote
         var matches = Regex.Matches(page, @"href\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? baseUri)) {
             yield break;
@@ -139,7 +152,7 @@ public static class WebCrawler {
 
         foreach (Match match in matches) {
             string href = match.Groups[1].Value;
-            if (href.StartsWith("javascript", StringComparison.OrdinalIgnoreCase) || href.StartsWith('#'))
+            if (href.StartsWith("javascript", StringComparison.OrdinalIgnoreCase) || href.StartsWith('#')) // skip javascript and anchors
                 continue;
 
             if (Uri.TryCreate(baseUri, href, out Uri? fullUri))

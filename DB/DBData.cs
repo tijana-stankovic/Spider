@@ -27,11 +27,11 @@ public class DBData {
     public Dictionary<string, StartingPoint> SPNames { get; set; } = []; // starting point names
 
     // Log parameters
-    public enum LogLevel {
-        Low,
-        Medium,
-        High,
-        Always
+    public enum LogLevel { // log details level
+        Low, // minimal logging
+        Medium, // moderate logging
+        High, // detailed logging
+        NoLogging // no logging
     }
     public string LogFileName { get; set; } = "spider_log.txt";
     public bool LogActive { get; set; } = true;

@@ -93,6 +93,10 @@ public class CmdInterpreter(DB db) {
                 Find(cmd.Args);
                 break;
 
+            case "LOG":
+                Log(cmd.Args);
+                break;
+
             default:
                 StatusCode = StatusCode.UnknownCommand;
                 View.PrintStatus(StatusCode);
@@ -504,18 +508,19 @@ public class CmdInterpreter(DB db) {
     private void Scan(List<string>? customNames, List<string>? customKeywords) {
         View.LogOpen();
 
-        View.LogPrint(View.FullLine);
-        View.Print("Terms that will be used during the scanning process:");
+        View.LogPrint(View.FullLine, true);
+        View.LogPrint("Terms used during the scanning process:", true);
         if (customNames == null) {
-            View.Print($"   Names: (ALL)");
+            View.LogPrint($"   Names: (ALL)", true);
         } else {
-            View.Print($"   Names: {string.Join(", ", customNames)}");
+            View.LogPrint($"   Names: {string.Join(", ", customNames)}", true);
         }
         if (customKeywords == null) {
-            View.Print($"   Keywords: (ALL)");
+            View.LogPrint($"   Keywords: (ALL)", true);
         } else {
-            View.Print($"   Keywords: {string.Join(", ", customKeywords)}");
+            View.LogPrint($"   Keywords: {string.Join(", ", customKeywords)}", true);
         }
+        View.LogPrint(View.FullLine, true);
 
         List<string> names;
         if (customNames == null) {
@@ -538,18 +543,19 @@ public class CmdInterpreter(DB db) {
             keywords = customKeywords;
         }
 
-        View.LogPrint(View.FullLine);
-        View.Print();
-        View.Print("The web crawling process has started.");
-        View.Print();
+        View.LogPrint("", true);
+        View.LogPrint("The web crawling process has started.", true);
+        View.LogPrint("", true);
 
         // Start crawling
         CrawlResult result = WebCrawler.CrawlAsync(startingPoints, keywords).GetAwaiter().GetResult();
 
-        View.Print();
-        View.Print("The web crawling process has finished.");
-        View.Print();
-        View.LogPrint(View.FullLine);
+        View.LogPrint("", true);
+        View.LogPrint("The web crawling process has finished.", true);
+        View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
+
+        View.LogPrint("", true);
+        View.LogPrint(View.FullLine, true);
 
         // removes all existing page/keywords connection for specified starting points and keywords
         // (new page/keywords connections will be added later)
@@ -567,6 +573,7 @@ public class CmdInterpreter(DB db) {
                 }
             }
             View.Print($"\rClearing the obsolete page/keywords connections from the database... completed successfully.");
+            View.LogPrint($"Clearing the obsolete page/keywords connections from the database... completed successfully.");
         }
 
         // create new page/keywords connections in the database based on result.UrlToKeywords
@@ -589,24 +596,30 @@ public class CmdInterpreter(DB db) {
                 Db.AddPage(page); // add page to the database
             }
             View.Print($"\rCreating new page/keywords connections in the database: {pageCount}/{pageCount} ... completed successfully.");
+            View.LogPrint($"Creating new page/keywords connections in the database: {pageCount}/{pageCount} ... completed successfully.");
         } else {
-            View.Print("No page/keywords connections found.");
+            View.LogPrint("No page/keywords connections found.", true);
         }
+        View.LogPrint(View.FullLine, true);
 
-        // View.Print();
-        // View.Print("Crawling results:");
-        // foreach (var url in result.UrlToKeywords) {
-        //     Console.WriteLine($"URL: {url.Key}");
-        //     Console.WriteLine($"    Starting point: {url.Value.spName}");
-        //     Console.WriteLine($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
-        // }
-        // foreach (var keyword in result.KeywordToUrls) {
-        //     Console.WriteLine($"Keyword: {keyword.Key}");
-        //     foreach (var matchUrl in keyword.Value.urlSet) {
-        //         Console.WriteLine($"    -> {matchUrl}");
-        //     }
-        // }        
-        View.LogPrint(View.FullLine);
+        if (result.UrlToKeywords.Count > 0) {
+            View.LogPrint();
+            View.LogPrint("Crawling results:");
+            foreach (var url in result.UrlToKeywords) {
+                View.LogPrint($"URL: {url.Key}");
+                View.LogPrint($"    Starting point: {url.Value.spName}");
+                View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
+            }
+            View.LogPrint();
+            foreach (var keyword in result.KeywordToUrls) {
+                View.LogPrint($"Keyword: {keyword.Key}");
+                foreach (var matchUrl in keyword.Value.urlSet) {
+                    View.LogPrint($"    -> {matchUrl}");
+                }
+            }
+            View.LogPrint();
+            View.LogPrint(View.FullLine);
+        }
 
         View.LogClose();
     }
@@ -684,6 +697,78 @@ public class CmdInterpreter(DB db) {
             }
         } else {
             View.Print($"No pages found with the keyword '{keyword}'.");
+        }
+    }
+
+    private void Log(string[] args)
+    {
+        var validValues = new HashSet<string> { "ON", "OFF", "LOW", "MEDIUM", "HIGH", "CLEAR", "FILE" };
+
+        if (args.Length == 0) {
+            View.LogPrintCurrentStatus();
+            return;
+        }
+
+        string command = args[0].ToUpper();
+
+        if (!validValues.Contains(command)) {
+            StatusCode = StatusCode.UnknownLogCommand;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        if ((command != "FILE" && args.Length != 1) ||
+            (command == "FILE" && args.Length != 2)) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        switch (command) {
+            case "ON":
+                View.LogActive = true;
+                Db.SaveLogParameters();
+                View.Print("Logging enabled.");
+                break;
+
+            case "OFF":
+                View.LogActive = false;
+                Db.SaveLogParameters();
+                View.Print("Logging disabled.");
+                break;
+
+            case "LOW":
+                View.CurrentLogLevel = DBData.LogLevel.Low;
+                Db.SaveLogParameters();
+                View.Print("Log level set to LOW.");
+                break;
+
+            case "MEDIUM":
+                View.CurrentLogLevel = DBData.LogLevel.Medium;
+                Db.SaveLogParameters();
+                View.Print("Log level set to MEDIUM.");
+                break;
+
+            case "HIGH":
+                View.CurrentLogLevel = DBData.LogLevel.High;
+                Db.SaveLogParameters();
+                View.Print("Log level set to HIGH.");
+                break;
+
+            case "FILE":
+                View.LogFileName = args[1];
+                Db.SaveLogParameters();
+                View.Print($"Log file name set to {args[1]}");
+                break;
+
+            case "CLEAR":
+                View.LogClear();
+                View.Print("Log cleared.");
+                break;
+
+            default:
+                View.PrintStatus(StatusCode.UnexpectedStatus);
+                break;
         }
     }
 }
