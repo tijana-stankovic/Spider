@@ -18,8 +18,8 @@ public class DBData {
     public int LastPageID { get; set; } = 0;
     public Dictionary<int, DBPage> Pages { get; set; } = []; // index: page ID -> page (this is the place all pages are stored) (1:1)
     public Dictionary<string, int> URLs { get; set; } = []; // index: full, unique page URL -> page ID (1:1)
-    public Dictionary<string, HashSet<int>> WebsiteToPages { get; set; } = []; // index: Website URL -> page ID (1:N)
-    public Dictionary<string, HashSet<int>> NameToPages { get; set; } = []; // index: Search starting point name -> page ID (1:N)
+    public Dictionary<string, HashSet<int>> WebsiteToPages { get; set; } = []; // index: website -> page ID (1:N)
+    public Dictionary<string, HashSet<int>> NameToPages { get; set; } = []; // index: starting point name -> page ID (1:N)
     public Dictionary<string, HashSet<int>> KeywordToPages { get; set; } = []; // index: keyword -> page ID (1:N)
 
     public Dictionary<string, string> Keywords { get; set; } = []; // all the keywords the user is searching for (the user is interested in)

@@ -6,6 +6,7 @@ public enum StatusCode {
     UnknownCommand,
     UnknownLogCommand,
     DbFileDoesNotExist,
+    DbFileDoesNotExistError,
     DbFileIncompatibleFormat,
     DbFileReadError,
     DbFileWriteError,

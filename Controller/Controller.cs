@@ -18,8 +18,13 @@ public class Controller {
                 break;
 
             case StatusCode.DbFileDoesNotExist:
+            case StatusCode.DbFileDoesNotExistError:
             case StatusCode.DbFileIncompatibleFormat:
             case StatusCode.DbFileReadError:
+                View.PrintStatus(Db.StatusCode);
+                break;
+
+            case StatusCode.DbFileWriteError:
                 View.PrintStatus(Db.StatusCode);
                 break;
 
@@ -45,7 +50,7 @@ public class Controller {
         } else {
             fileName = args[0];
             if (!fileName.Contains('.')) {
-                fileName += ".pdb";
+                fileName += "." + DB.DefaultDbExtension;
             }
             View.Print("The database file name: " + fileName);
         }

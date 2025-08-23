@@ -9,6 +9,7 @@ using System.Text.Json;
 
 public class DB {
     public static readonly string DefaultDbFilename = "spider_db.sdb";
+    public static readonly string DefaultDbExtension = "sdb";
     public static readonly int DbVersion = 1;
     private string _dbFilename = DefaultDbFilename;
 
@@ -35,6 +36,8 @@ public class DB {
             }
         }
     }
+
+    public string DbFilenameExtension { get; } = DefaultDbExtension;
 
     public bool DataChanged { get; set; }
 
@@ -71,7 +74,12 @@ public class DB {
             StatusCode = StatusCode.NoError;
             
         } catch (FileNotFoundException) { // File not found
-            StatusCode = StatusCode.DbFileDoesNotExist;
+            WriteDB(); // try to create new file
+            if (StatusCode == StatusCode.NoError) {
+                StatusCode = StatusCode.DbFileDoesNotExist; // show warning (that new file is created)
+            } else {
+                StatusCode = StatusCode.DbFileDoesNotExistError; // show error (that new file is not created)
+            }
         } catch (JsonException) { // e.g. file exists, but is empty
             StatusCode = StatusCode.DbFileIncompatibleFormat;
         } catch (Exception) { // Read error
@@ -206,7 +214,7 @@ public class DB {
     // Returns true if it was removed, or false if starting point was not found
     public bool RemoveStartingPoint(string spName) {
         if (Data.RemoveStartingPoint(spName)) {
-            
+
             var pageIDs = Data.GetPageIDsWithName(spName); // get all page IDs connected with this starting point
             if (pageIDs != null) {
                 foreach (var pageID in pageIDs) { // remove all pages connected with this starting point
