@@ -7,9 +7,6 @@ using System.Collections.Generic;
 
 public class View {
     public static string LogFileName { get; set; } = "spider_log.txt";
-    public static bool LogActive { get; set; } = true;
-    public static DBData.LogLevel CurrentLogLevel { get; set; } = DBData.LogLevel.Medium;
-
     private static StreamWriter? _logWriter = null;
 
     public static string FullLine { get; } = "--------------------------------------------------------------------------------";
@@ -60,7 +57,6 @@ public class View {
 
             int pageCount = dbStatistics["PAGES"];
             if (pageCount > 0) {
-                Print("   - Number of websites: " + dbStatistics["WEBSITES"] + " (use 'LW' command to get a list)");
                 Print("   - Number of HTML pages: " + pageCount);
             } else {
                 Print("   - Number of HTML pages: 0 (use 'SCAN' command to initiates the web crawling process)");
@@ -105,18 +101,14 @@ public class View {
         }
     }
 
-    public static void LogPrint(string message = "", bool printToConsole = false, DBData.LogLevel logLevel = DBData.LogLevel.Low) { 
+    public static void LogPrint(string message = "", bool printToConsole = false) { 
         if (printToConsole) {
             View.Print(message);
         }
-        if (LogActive && logLevel <= CurrentLogLevel) {
-            _logWriter?.WriteLine(message);
-        }
+        _logWriter?.WriteLine(message);
     }
 
     public static void LogPrintCurrentStatus() { 
         Print($"Log filename: {LogFileName}");
-        Print($"Log status: {(LogActive ? "Active" : "Inactive")}");
-        Print($"Log details level: {CurrentLogLevel}");
     }
 }

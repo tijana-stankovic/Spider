@@ -71,21 +71,12 @@ public class CmdInterpreter(DB db) {
                 ListStartingPoints(cmd.Args);
                 break;
 
-            case "LW":
-                ListWebsites(cmd.Args);
-                break;
-
             case "SCAN":
                 Scan(cmd.Args);
                 break;
 
             case "SCANK":
                 ScanKeywords(cmd.Args);
-                break;
-
-            case "CLEAR":
-            case "C":
-                Clear(cmd.Args);
                 break;
 
             case "FIND":
@@ -139,16 +130,12 @@ public class CmdInterpreter(DB db) {
         View.Print("      Lists all existing keywords in the database.");
         View.Print("    - LIST NAMES (LIST STARTINGPOINTS)");
         View.Print("      Lists all existing starting points in the database.");
-        View.Print("    - LIST WEBSITES (LIST WEBS)");
-        View.Print("      Lists all existing websites in the database.");
         View.Print("    - LIST");
         View.Print("      Displays database statistics.");
         View.Print("- LK");
         View.Print("  Short form for LIST KEYWORDS command. For details, see LIST command.");
         View.Print("- LN (LS)");
         View.Print("  Short form for LIST NAMES (LIST STARTINGPOINTS) command. For details, see LIST command.");
-        View.Print("- LW");
-        View.Print("  Short form for LIST WEBSITES (LIST WEBS) command. For details, see LIST command.");
         View.Print("- SCAN");
         View.Print("    - SCAN [<name-list>] [<keyword-list>]");
         View.Print("      Start web crawling for the specified names and keywords.");
@@ -163,16 +150,9 @@ public class CmdInterpreter(DB db) {
         View.Print("- FIND (F)");
         View.Print("  FIND <keyword>");
         View.Print("  Find and list URL of all pages in the database that contain the specified keyword.");
-        View.Print("- CLEAR (C)");
-        View.Print("  CLEAR <name>");
-        View.Print("  Clear from the database all pages related to the specified starting point name.");
         View.Print("- LOG");
         View.Print("  - LOG <new-log-filename>");
         View.Print("    Change the log file name. Default log file name is 'spider_log.txt'.");
-        View.Print("  - LOG ON | OFF");
-        View.Print("    Enable or disable logging. Default is ON.");
-        View.Print("  - LOG LOW | MEDIUM | HIGH");
-        View.Print("    Set the logging level. Default is MEDIUM.");
         View.Print("  - LOG CLEAR");
         View.Print("    Clear the log file.");
         View.Print("  - LOG");
@@ -363,11 +343,6 @@ public class CmdInterpreter(DB db) {
             return;
         }
 
-        if (args.Length == 1 && (args[0].ToUpper() == "WEBSITES" || args[0].ToUpper() == "WEBS")) {
-            ListWebsites(args[1..]);
-            return;
-        }
-
         StatusCode = StatusCode.InvalidNumberOfArguments;
         View.PrintStatus(StatusCode);
     }
@@ -400,19 +375,6 @@ public class CmdInterpreter(DB db) {
             } else {
                 View.Print($"   {spName} -> (not found)");
             }
-        }
-    }
-
-    private void ListWebsites(string[] args) {
-        if (args.Length > 0) {
-            StatusCode = StatusCode.InvalidNumberOfArguments;
-            View.PrintStatus(StatusCode);
-            return;
-        }
-
-        View.Print("List of websites in the database:");
-        foreach (string website in Db.GetFoundWebsites()) {
-            View.Print($"   {website}");
         }
     }
 
@@ -602,42 +564,32 @@ public class CmdInterpreter(DB db) {
         // (new page/keywords connections will be added later)
         var count = names.Count * keywords.Count;
         if (count > 0) {
-            View.Print($"Clearing the obsolete page-keywords connections from the database: {0}/{count}", false);
-            int num = 0;
             foreach (string spName in names) {
                 foreach (string keyword in keywords) {
-                    View.Print($"\rClearing the obsolete page-keywords connections from the database: {++num}/{count}", false);
                     var pageIDs = GetCommonPageIDs(spName, keyword);
                     foreach (var pageID in pageIDs) {
                         Db.RemovePageKeywordConnection(keyword, pageID);
                     }
                 }
             }
-            View.Print($"\rClearing the obsolete page-keywords connections from the database... completed successfully.");
-            View.LogPrint($"Clearing the obsolete page-keywords connections from the database... completed successfully.");
+            View.LogPrint($"Clearing the obsolete page-keywords connections from the database... completed successfully.", true);
         }
 
         // create new page/keywords connections in the database based on result.UrlToKeywords
         var pageCount = result.UrlToKeywords.Count;
         if (pageCount > 0) {
-            View.Print($"Creating new page-keywords connections in the database: {0}/{pageCount}", false);
-
-            int pageNum = 0;
             foreach (var url in result.UrlToKeywords) { // for all found URLs
-                View.Print($"\rCreating new page-keywords connections in the database: {++pageNum}/{pageCount}", false);
                 var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
                                                        // create new page
                 DBPage page = new() {
                     Name = spName,
                     URL = url.Key,
-                    Website = WebCrawler.GetBaseDomain(url.Key),
                     Keywords = keywordsSet
                 };
 
                 Db.AddPage(page); // add page to the database
             }
-            View.Print($"\rCreating new page-keywords connections in the database: {pageCount} ... completed successfully.                 ");
-            View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.");
+            View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
         } else {
             View.LogPrint("No page-keywords connections found.", true);
         }
@@ -680,31 +632,6 @@ public class CmdInterpreter(DB db) {
         return intersection;
     }
 
-    private void Clear(string[] args) {
-        if (args.Length != 1) {
-            StatusCode = StatusCode.InvalidNumberOfArguments;
-            View.PrintStatus(StatusCode);
-            return;
-        }
-
-        if (Db.GetStartingPoint(args[0]) == null) {
-            View.Print($"The starting point named '{args[0]}' does not exist.");
-            return;
-        }
-
-        var spName = args[0];
-        var pageIDs = Db.GetPageIDsWithName(spName);
-        if (pageIDs != null) {
-            View.Print($"Deleting pages with the origin '{spName}'... ", false);
-            foreach (var pageID in pageIDs) {
-                Db.RemovePage(pageID);
-            }
-            View.Print("completed successfully.");
-        } else {
-            View.Print($"No pages found with the origin '{spName}'.");
-        }
-    }
-
     private void Find(string[] args) {
         if (args.Length != 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -743,20 +670,12 @@ public class CmdInterpreter(DB db) {
 
     private void Log(string[] args)
     {
-        var validValues = new HashSet<string> { "ON", "OFF", "LOW", "MEDIUM", "HIGH", "CLEAR", "FILE" };
-
         if (args.Length == 0) {
             View.LogPrintCurrentStatus();
             return;
         }
 
         string command = args[0].ToUpper();
-
-        if (!validValues.Contains(command)) {
-            StatusCode = StatusCode.UnknownLogCommand;
-            View.PrintStatus(StatusCode);
-            return;
-        }
 
         if ((command != "FILE" && args.Length != 1) ||
             (command == "FILE" && args.Length != 2)) {
@@ -765,51 +684,16 @@ public class CmdInterpreter(DB db) {
             return;
         }
 
-        switch (command) {
-            case "ON":
-                View.LogActive = true;
-                Db.SaveLogParameters();
-                View.Print("Logging enabled.");
-                break;
-
-            case "OFF":
-                View.LogActive = false;
-                Db.SaveLogParameters();
-                View.Print("Logging disabled.");
-                break;
-
-            case "LOW":
-                View.CurrentLogLevel = DBData.LogLevel.Low;
-                Db.SaveLogParameters();
-                View.Print("Log level set to LOW.");
-                break;
-
-            case "MEDIUM":
-                View.CurrentLogLevel = DBData.LogLevel.Medium;
-                Db.SaveLogParameters();
-                View.Print("Log level set to MEDIUM.");
-                break;
-
-            case "HIGH":
-                View.CurrentLogLevel = DBData.LogLevel.High;
-                Db.SaveLogParameters();
-                View.Print("Log level set to HIGH.");
-                break;
-
-            case "FILE":
-                View.LogFileName = args[1];
-                Db.SaveLogParameters();
-                View.Print($"Log file name set to {args[1]}");
-                break;
-
-            case "CLEAR":
-                View.LogClear();
-                View.Print("Log cleared.");
-                break;
-
-            default:
-                View.PrintStatus(StatusCode.UnexpectedStatus);
-                break;
+        if (command == "FILE") {
+            View.LogFileName = args[1];
+            Db.SaveLogParameters();
+            View.Print($"Log file name set to {args[1]}");
+        } else if (command == "CLEAR") {
+            View.LogClear();
+            View.Print("Log cleared.");
+        } else {
+            StatusCode = StatusCode.UnknownLogCommand;
+            View.PrintStatus(StatusCode);
         }
     }
 }

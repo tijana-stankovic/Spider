@@ -7,7 +7,6 @@ public class DBPage {
     private int _id = 0;
     private string _name = ""; // page 'origin' (the name of the page we started from to get to this page)
     private string _url = ""; // full page URL
-    private string _website = ""; // The URL of the website to which the page belongs
     private HashSet<string> _keywords = []; // all the keywords the page contains
 
     // for JSON deserialization (in DB.WriteDB()) to work properly,
@@ -16,11 +15,10 @@ public class DBPage {
     public DBPage() {}
 
     public DBPage(int id, 
-                string url, string website, string name, 
+                string url, string name, 
                 HashSet<String> keywords) {
         ID = id;
         URL = url;
-        Website = website;
         Name = name;
         Keywords = keywords;
     }
@@ -52,16 +50,6 @@ public class DBPage {
                 throw new ArgumentException("URL must be specified!");
             }
             _url = value;
-        }
-    }
-
-    public string Website {
-        get => _website;
-        set {
-            if (string.IsNullOrWhiteSpace(value)) {
-                throw new ArgumentException("Website must be specified!");
-            }
-            _website = value;
         }
     }
 

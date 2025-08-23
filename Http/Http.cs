@@ -40,22 +40,22 @@ public static class WebCrawler {
             // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
             if (IsNonRelevant(url)) {
                 View.LogPrint("Non-relevant content for keyword extraction, skip it: " + url, false);
-                View.LogPrint("    Remaining links: " + tasks.Count, false, DBData.LogLevel.Medium);
+                View.LogPrint("    Remaining links: " + tasks.Count, false);
                 continue;
             }
 
             // if URL is already visited, skip it
             if (result.VisitedUrls.Contains(UrlWithoutFragment(url))) { 
                 View.LogPrint("Already visited link, skip it: " + url, false);
-                View.LogPrint("    Remaining links: " + tasks.Count, false, DBData.LogLevel.Medium);
+                View.LogPrint("    Remaining links: " + tasks.Count, false);
                 continue;
             }
 
             // check base URL filter (if url doesn't match base URL, it is filtered out)
             if (baseUrl != "" && !url.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
                 View.LogPrint("URL doesn't match base URL, skip it: " + url, false);
-                View.LogPrint("    Base URL: " + baseUrl, false, DBData.LogLevel.High);
-                View.LogPrint("    Remaining links: " + tasks.Count, false, DBData.LogLevel.Medium);
+                View.LogPrint("    Base URL: " + baseUrl, false);
+                View.LogPrint("    Remaining links: " + tasks.Count, false);
                 continue;
             }
 
@@ -69,7 +69,7 @@ public static class WebCrawler {
 
             // if page could not be fetched, skip it
             if (page == null) { 
-                View.LogPrint("    Page could not be fetched, skip it.", false, DBData.LogLevel.Medium);
+                View.LogPrint("    Page could not be fetched, skip it.", false);
                 continue;
             }
 
@@ -93,13 +93,13 @@ public static class WebCrawler {
 
                 // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
                 if (IsNonRelevant(link)) {
-                    View.LogPrint("    Non-relevant content for keyword extraction, skip it: " + link, false, DBData.LogLevel.Medium);
+                    View.LogPrint("    Non-relevant content for keyword extraction, skip it: " + link, false);
                     continue;
                 }
 
                 // if URL is already visited, skip it
                 if (result.VisitedUrls.Contains(UrlWithoutFragment(link))) { 
-                    View.LogPrint("    Already visited link found, skip it: " + link, false, DBData.LogLevel.Medium);
+                    View.LogPrint("    Already visited link found, skip it: " + link, false);
                     continue;
                 }
 
@@ -109,31 +109,31 @@ public static class WebCrawler {
                 if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) { // same base => internal link
                     if (internalLeft > 0) {
                         if (baseUrl != "" && !link.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) { // if the base URL is specified, check it
-                            View.LogPrint("    New internal link found, but skipped (URL doesn't match base URL): " + link, false, DBData.LogLevel.Medium);
-                            View.LogPrint("    Base URL: " + baseUrl, false, DBData.LogLevel.High);
+                            View.LogPrint("    New internal link found, but skipped (URL doesn't match base URL): " + link, false);
+                            View.LogPrint("    Base URL: " + baseUrl, false);
                         } else {
-                            View.LogPrint("    New internal link found and added: " + link, false, DBData.LogLevel.Medium);
+                            View.LogPrint("    New internal link found and added: " + link, false);
                             tasks.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
                             newInternalLinks++;
                         }
                     } else {
-                        View.LogPrint("    New internal link found, but skipped (too far from the starting point): " + link, false, DBData.LogLevel.Medium);
+                        View.LogPrint("    New internal link found, but skipped (too far from the starting point): " + link, false);
                     }
                 } else if (externalLeft > 0) { // different base => external link
-                    View.LogPrint("    New external link found and added: " + link, false, DBData.LogLevel.Medium);
+                    View.LogPrint("    New external link found and added: " + link, false);
                     tasks.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
                     newExternalLinks++;
                 } else {
-                    View.LogPrint("    New external link found, but skipped (too far from the starting point): " + link, false, DBData.LogLevel.Medium);
+                    View.LogPrint("    New external link found, but skipped (too far from the starting point): " + link, false);
                 }
             }
             if (newInternalLinks + newExternalLinks > 0) {
                 View.LogPrint($"    New links added: {newInternalLinks + newExternalLinks} (internal: {newInternalLinks}, external: {newExternalLinks})", true);
             }
 
-            View.LogPrint("    Remaining links: " + tasks.Count, true, DBData.LogLevel.Medium);
-            View.LogPrint("    Remaining internal depth: " + internalLeft, false, DBData.LogLevel.High);
-            View.LogPrint("    Remaining external depth: " + externalLeft, false, DBData.LogLevel.High);
+            View.LogPrint("    Remaining links: " + tasks.Count, true);
+            View.LogPrint("    Remaining internal depth: " + internalLeft, false);
+            View.LogPrint("    Remaining external depth: " + externalLeft, false);
         }
 
         return result;

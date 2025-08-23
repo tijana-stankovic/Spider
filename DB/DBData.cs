@@ -18,7 +18,6 @@ public class DBData {
     public int LastPageID { get; set; } = 0;
     public Dictionary<int, DBPage> Pages { get; set; } = []; // index: page ID -> page (this is the place all pages are stored) (1:1)
     public Dictionary<string, int> URLs { get; set; } = []; // index: full, unique page URL -> page ID (1:1)
-    public Dictionary<string, HashSet<int>> WebsiteToPages { get; set; } = []; // index: website -> page ID (1:N)
     public Dictionary<string, HashSet<int>> NameToPages { get; set; } = []; // index: starting point name -> page ID (1:N)
     public Dictionary<string, HashSet<int>> KeywordToPages { get; set; } = []; // index: keyword -> page ID (1:N)
 
@@ -27,15 +26,7 @@ public class DBData {
     public Dictionary<string, StartingPoint> SPNames { get; set; } = []; // starting point names
 
     // Log parameters
-    public enum LogLevel { // log details level
-        Low, // minimal logging
-        Medium, // moderate logging
-        High, // detailed logging
-        NoLogging // no logging
-    }
     public string LogFileName { get; set; } = "spider_log.txt";
-    public bool LogActive { get; set; } = true;
-    public LogLevel CurrentLogLevel { get; set; } = LogLevel.Medium;
 
     public int NextPageID() {
         LastPageID++;
@@ -79,13 +70,6 @@ public class DBData {
         return SPNames.TryGetValue(key, out var sp) ? sp : null;
     }
 
-    // return a sorted list of all sites contained in scanned pages.
-    public List<string> GetFoundWebsites() {
-        var websites = new List<string>(WebsiteToPages.Keys);
-        websites.Sort();
-        return websites;
-    }
-
     // return 
     public DBPage? GetPage(int pageID) {
         return Pages.TryGetValue(pageID, out var file) ? file : null;
@@ -108,27 +92,6 @@ public class DBData {
 
     public void RemovePageURL(string URL) {
         URLs.Remove(URL.ToLower());
-    }
-
-    public void AddPageWebsite(string website, int pageID) {
-        if (string.IsNullOrWhiteSpace(website)) {
-            throw new ArgumentException("Website must be specified!");
-        }
-
-        if (!WebsiteToPages.TryGetValue(website.ToLower(), out var set)) {
-            set = [];
-            WebsiteToPages[website.ToLower()] = set;
-        }
-        set.Add(pageID);
-    }
-
-    public void RemovePageWebsite(string website, int pageID) {
-        if (WebsiteToPages.TryGetValue(website.ToLower(), out var set)) {
-            set.Remove(pageID);
-            if (set.Count == 0) {
-                WebsiteToPages.Remove(website.ToLower());
-            }
-        }
     }
 
     public void AddPageName(string name, int pageID) {
@@ -226,10 +189,6 @@ public class DBData {
         return URLs.TryGetValue(URL.ToLower(), out var id) ? id : 0;
     }
 
-    public HashSet<int>? GetPageIDsFromWebsite(string website) {
-        return WebsiteToPages.TryGetValue(website.ToLower(), out var set) ? set : null;
-    }
-
     public HashSet<int>? GetPageIDsWithName(string name) {
         return NameToPages.TryGetValue(name.ToUpper(), out var set) ? set : null;
     }
@@ -243,7 +202,6 @@ public class DBData {
         {
             { "NAMES", SPNames.Count },
             { "KEYS", Keywords.Count },
-            { "WEBSITES", WebsiteToPages.Count },
             { "PAGES", Pages.Count },
         };
         return dbStatistics;

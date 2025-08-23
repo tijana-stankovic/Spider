@@ -116,7 +116,6 @@ public class DB {
         Data.AddPage(page);
         int pageID = page.ID;
         Data.AddPageURL(page.URL, pageID);
-        Data.AddPageWebsite(page.Website, pageID);
         Data.AddPageName(page.Name, pageID);
         // add new found keywords
         foreach (var keyword in page.Keywords) {
@@ -139,7 +138,6 @@ public class DB {
 
         Data.RemovePage(pageID);
         Data.RemovePageURL(page.URL);
-        Data.RemovePageWebsite(page.Website, pageID);
         Data.RemovePageName(page.Name, pageID);
 
         foreach (var keyword in page.Keywords) {
@@ -186,10 +184,6 @@ public class DB {
             }
             case 'N': {
                 pageIDs = Data.GetPageIDsWithName(key);
-                break;
-            }
-            case 'W': {
-                pageIDs = Data.GetPageIDsFromWebsite(key);
                 break;
             }
             default: {
@@ -287,10 +281,6 @@ public class DB {
         return Data.GetStartingPoint(spName);
     }
 
-    public List<string> GetFoundWebsites() { 
-        return Data.GetFoundWebsites(); 
-    }
-
     public HashSet<int>? GetPageIDsWithName(string name) {
         return Data.GetPageIDsWithName(name);
     }
@@ -305,14 +295,10 @@ public class DB {
 
     public void SaveLogParameters() {
         Data.LogFileName = View.LogFileName;
-        Data.LogActive = View.LogActive;
-        Data.CurrentLogLevel = View.CurrentLogLevel;
         DataChanged = true;
     }
 
     public void RestoreLogParameters() {
         View.LogFileName = Data.LogFileName;
-        View.LogActive = Data.LogActive;
-        View.CurrentLogLevel = Data.CurrentLogLevel;
     }
 }
