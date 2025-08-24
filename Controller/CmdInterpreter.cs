@@ -513,6 +513,20 @@ public class CmdInterpreter(DB db) {
 
     // customNames, customKeywords = user specified set of names and/or keywords
     private void Scan(List<string>? customNames, List<string>? customKeywords) {
+        // if parallel crawling is already active, print warning and exit immediately
+        // TODO: lock
+        if (PWebCrawler.PScanActive) {
+            View.Print("Warning: Parallel crawling is already in progress.");
+            View.Print("         Please wait for it to complete...");
+
+            // TODO: lock
+            if (PWebCrawler.ActiveThreads > 0) {
+                View.Print($"         Currently active crawling threads: {PWebCrawler.ActiveThreads}");
+            }
+
+            return;
+        }
+
         View.LogOpen();
 
         View.LogPrint(View.FullLine, true);
@@ -550,22 +564,48 @@ public class CmdInterpreter(DB db) {
             keywords = customKeywords;
         }
 
-        View.LogPrint("", true);
-        View.LogPrint("The web crawling process has started.", true);
-        View.LogPrint("", true);
+        // removes all existing page/keywords connection for specified starting points and keywords
+        // (new page/keywords connections will be added later)
+        var count = names.Count * keywords.Count;
+        if (count > 0) {
+            foreach (string spName in names) {
+                foreach (string keyword in keywords) {
+                    var pageIDs = GetCommonPageIDs(spName, keyword);
+                    foreach (var pageID in pageIDs) {
+                        Db.RemovePageKeywordConnection(keyword, pageID);
+                    }
+                }
+            }
+            View.LogPrint("", true);
+            View.LogPrint("Clearing the obsolete page-keywords connections from the database... completed successfully.", true);
+        }
 
         // Start crawling
-        if (PWebCrawler.NumOfThreads > 1) {
-            Task.Run(async () => {
+        if (PWebCrawler.NumOfThreads > 1) { // parallel crawling
+            View.LogPrint("", true);
+            View.LogPrint("The parallel web crawling process has started in the background.", true);
+            View.LogPrint("", true);
+
+            Task.Run(() => {
+                // TODO: lock
+                PWebCrawler.PScanActive = true;
+
                 try {
-                    CrawlResult result = await PWebCrawler.Crawl(startingPoints, keywords);
-                    View.Print("Crawling completed successfully.");
+                    CrawlResult result = PWebCrawler.Crawl(startingPoints, keywords);
+                    View.LogPrint("The parallel crawling completed successfully.", false); // print only to log !
                 }
                 catch (Exception _) {
                 }
+
+                View.LogClose();
+                // TODO: lock
+                PWebCrawler.PScanActive = false;
             });
-            View.Print("The parallel web crawling process has started.");
-        } else {
+        } else { // sequential crawling
+            View.LogPrint("", true);
+            View.LogPrint("The web crawling process has started.", true);
+            View.LogPrint("", true);
+
             CrawlResult result = WebCrawler.Crawl(startingPoints, keywords).GetAwaiter().GetResult();
 
             View.LogPrint("", true);
@@ -574,21 +614,6 @@ public class CmdInterpreter(DB db) {
 
             View.LogPrint("", true);
             View.LogPrint(View.FullLine, true);
-
-            // removes all existing page/keywords connection for specified starting points and keywords
-            // (new page/keywords connections will be added later)
-            var count = names.Count * keywords.Count;
-            if (count > 0) {
-                foreach (string spName in names) {
-                    foreach (string keyword in keywords) {
-                        var pageIDs = GetCommonPageIDs(spName, keyword);
-                        foreach (var pageID in pageIDs) {
-                            Db.RemovePageKeywordConnection(keyword, pageID);
-                        }
-                    }
-                }
-                View.LogPrint($"Clearing the obsolete page-keywords connections from the database... completed successfully.", true);
-            }
 
             // create new page/keywords connections in the database based on result.UrlToKeywords
             var pageCount = result.UrlToKeywords.Count;

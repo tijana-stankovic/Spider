@@ -250,143 +250,168 @@ public static class WebCrawler {
 // ***************************************************************
 // parallel web crawler
 public static class PWebCrawler {
-    public static readonly int MaxNumOfThreads = 99;
-    public static int NumOfThreads { get; set; } = 1; // 1 = no parallelism
+    public static readonly int MaxNumOfThreads = 99; // max allowed number of threads
+    public static int NumOfThreads { get; set; } = 1; // number of allowed threads, 1 = no parallelism
+
+    public static bool PScanActive { get; set; } = false; // is parallel scanning active or not
+    public static object pscanActive = new();
+
+    public static int ActiveThreads { get; set; } = 0; // number of currently active threads
+    public static object activeThreads = new();
+
     private static readonly HttpClient httpClient = new();
 
     // main crawling function
-    public static async Task<CrawlResult> Crawl(List<StartingPoint> startingPoints, List<string> keywords) {
+    public static CrawlResult Crawl(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
+        object resultLock = new();
         var tasks = new Queue<(string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL)>();
+        object tasksLock = new();
 
-        // first, put all starting points into the queue
-        foreach (var sp in startingPoints) {
-            tasks.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name, sp.BaseURL, sp.URL));
+        // process URLs from the queue
+        void ProcessURL() {
+            while (true) {
+                (string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL) task;
+
+                lock (tasksLock) {
+                    if (tasks.Count == 0) break; // if the task queue is empty, exit the loop
+                    task = tasks.Dequeue(); // get the next task (URL)
+                }
+
+                // process the URL (fetch page, extract links, etc.)
+                // ...
+                string? page = FetchPage(task.url); // fetch page content
+                View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");
+            }
+
+            // this thread finishes, so decrement the active thread count
+            lock (activeThreads) {
+                ActiveThreads--;
+                View.Print($"DEC Active threads: {ActiveThreads}");
+            }
         }
 
         // process each URL in the queue, until all links are exhausted (queue is empty)
-        while (tasks.Count > 0) {
-            var (url, internalLeft, externalLeft, name, baseUrl, spURL) = tasks.Dequeue(); // next URL
+        // while (tasks.Count > 0) {
+        //     var (url, internalLeft, externalLeft, name, baseUrl, spURL) = tasks.Dequeue(); // next URL
 
-            // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
-            if (IsNonRelevant(url)) {
-                // View.LogPrint("Non-relevant content for keyword extraction, skip it: " + url, false);
-                // View.LogPrint("    Remaining links: " + tasks.Count, false);
-                continue;
+        //     // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
+        //     if (IsNonRelevant(url)) {
+        //         continue;
+        //     }
+
+        //     // if URL is already visited, skip it
+        //     if (result.VisitedUrls.Contains(UrlWithoutFragment(url))) { 
+        //         continue;
+        //     }
+
+        //     // check base URL filter (if url doesn't match base URL, it is filtered out)
+        //     if (baseUrl != "" && !url.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
+        //         continue;
+        //     }
+
+        //     result.VisitedUrls.Add(UrlWithoutFragment(url)); // add URL to visited list
+
+        //     // *******************************************************
+        //     string? page = FetchPage(url); // fetch page content
+        //     // *******************************************************
+
+        //     // if page could not be fetched, skip it
+        //     if (page == null) { 
+        //         continue;
+        //     }
+
+        //     // search for keywords
+        //     var foundKeywords = FindKeywords(page, keywords);
+        //     if (foundKeywords.Count > 0) {
+        //         result.UrlToKeywords[url] = (foundKeywords, name); 
+        //     }
+        //     foreach (var keyword in foundKeywords) {
+        //         if (!result.KeywordToUrls.TryGetValue(keyword, out var value)) { // if keyword is already found in some of previous pages, get that Set
+        //             value = (new HashSet<string>(), name); // otherwise create a new Set
+        //             result.KeywordToUrls[keyword] = value; // add the Set to the dictionary
+        //         }
+        //         value.urlSet.Add(url); // add the current URL to the Set
+        //     }
+
+        //     // link extraction (search/extract new links from the page)
+        //     int newInternalLinks = 0, newExternalLinks = 0;
+        //     foreach (var link in ExtractLinks(page, url)) { // process found links and add new ones to the queue
+
+        //         // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
+        //         if (IsNonRelevant(link)) {
+        //             continue;
+        //         }
+
+        //         // if URL is already visited, skip it
+        //         if (result.VisitedUrls.Contains(UrlWithoutFragment(link))) { 
+        //             continue;
+        //         }
+
+        //         string baseDomain = GetBaseDomain(spURL); // base of starting point URL
+        //         string linkDomain = GetBaseDomain(link); // base of found link URL
+
+        //         if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) { // same base => internal link
+        //             if (internalLeft > 0) {
+        //                 if (baseUrl != "" && !link.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) { // if the base URL is specified, check it
+        //                     // New internal link found, but skipped (URL doesn't match base URL): "
+        //                 } else {
+        //                     tasks.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
+        //                     newInternalLinks++;
+        //                 }
+        //             } else { // New internal link found, but skipped (too far from the starting point)
+        //             }
+        //         } else if (externalLeft > 0) { // different base => external link
+        //             tasks.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
+        //             newExternalLinks++;
+        //         } else { // New external link found, but skipped (too far from the starting point)
+        //         }
+        //     }
+        // }
+
+        // first, put all starting points into the queue
+        lock (tasksLock) {
+            foreach (var sp in startingPoints) {
+                tasks.Enqueue((sp.URL, sp.InternalDepth, sp.ExternalDepth, sp.Name, sp.BaseURL, sp.URL));
             }
-
-            // if URL is already visited, skip it
-            if (result.VisitedUrls.Contains(UrlWithoutFragment(url))) { 
-                // View.LogPrint("Already visited link, skip it: " + url, false);
-                // View.LogPrint("    Remaining links: " + tasks.Count, false);
-                continue;
-            }
-
-            // check base URL filter (if url doesn't match base URL, it is filtered out)
-            if (baseUrl != "" && !url.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) {
-                // View.LogPrint("URL doesn't match base URL, skip it: " + url, false);
-                // View.LogPrint("    Base URL: " + baseUrl, false);
-                // View.LogPrint("    Remaining links: " + tasks.Count, false);
-                continue;
-            }
-
-            // View.LogPrint("Crawling: " + url, true);
-
-            result.VisitedUrls.Add(UrlWithoutFragment(url)); // add URL to visited list
-
-            // *******************************************************
-            string? page = await FetchPage(url); // fetch page content
-            // *******************************************************
-
-            // if page could not be fetched, skip it
-            if (page == null) { 
-                // View.LogPrint("    Page could not be fetched, skip it.", false);
-                continue;
-            }
-
-            // search for keywords
-            var foundKeywords = FindKeywords(page, keywords);
-            if (foundKeywords.Count > 0) {
-                // View.LogPrint("    Keywords found: " + string.Join(", ", foundKeywords), true);
-                result.UrlToKeywords[url] = (foundKeywords, name); 
-            }
-            foreach (var keyword in foundKeywords) {
-                if (!result.KeywordToUrls.TryGetValue(keyword, out var value)) { // if keyword is already found in some of previous pages, get that Set
-                    value = (new HashSet<string>(), name); // otherwise create a new Set
-                    result.KeywordToUrls[keyword] = value; // add the Set to the dictionary
-                }
-                value.urlSet.Add(url); // add the current URL to the Set
-            }
-
-            // link extraction (search/extract new links from the page)
-            int newInternalLinks = 0, newExternalLinks = 0;
-            foreach (var link in ExtractLinks(page, url)) { // process found links and add new ones to the queue
-
-                // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
-                if (IsNonRelevant(link)) {
-                    // View.LogPrint("    Non-relevant content for keyword extraction, skip it: " + link, false);
-                    continue;
-                }
-
-                // if URL is already visited, skip it
-                if (result.VisitedUrls.Contains(UrlWithoutFragment(link))) { 
-                    // View.LogPrint("    Already visited link found, skip it: " + link, false);
-                    continue;
-                }
-
-                string baseDomain = GetBaseDomain(spURL); // base of starting point URL
-                string linkDomain = GetBaseDomain(link); // base of found link URL
-
-                if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) { // same base => internal link
-                    if (internalLeft > 0) {
-                        if (baseUrl != "" && !link.StartsWith(baseUrl, StringComparison.OrdinalIgnoreCase)) { // if the base URL is specified, check it
-                            // View.LogPrint("    New internal link found, but skipped (URL doesn't match base URL): " + link, false);
-                            // View.LogPrint("    Base URL: " + baseUrl, false);
-                        } else {
-                            // View.LogPrint("    New internal link found and added: " + link, false);
-                            tasks.Enqueue((link, internalLeft - 1, externalLeft, name, baseUrl, spURL));
-                            newInternalLinks++;
-                        }
-                    } else {
-                        // View.LogPrint("    New internal link found, but skipped (too far from the starting point): " + link, false);
-                    }
-                } else if (externalLeft > 0) { // different base => external link
-                    // View.LogPrint("    New external link found and added: " + link, false);
-                    tasks.Enqueue((link, internalLeft, externalLeft - 1, name, "", spURL)); // external link doesn't have to match base URL
-                    newExternalLinks++;
-                } else {
-                    // View.LogPrint("    New external link found, but skipped (too far from the starting point): " + link, false);
-                }
-            }
-            if (newInternalLinks + newExternalLinks > 0) {
-                // View.LogPrint($"    New links added: {newInternalLinks + newExternalLinks} (internal: {newInternalLinks}, external: {newExternalLinks})", true);
-            }
-
-            // View.LogPrint("    Remaining links: " + tasks.Count, true);
-            // View.LogPrint("    Remaining internal depth: " + internalLeft, false);
-            // View.LogPrint("    Remaining external depth: " + externalLeft, false);
         }
 
+        // process each URL in the queue, until all links are exhausted (queue is empty)
+        while (true) {
+            lock (tasksLock) lock (activeThreads) {
+                if (tasks.Count == 0 && ActiveThreads == 0) break;
+
+                if (tasks.Count > 0 && ActiveThreads < NumOfThreads && ActiveThreads < MaxNumOfThreads) {
+                    var thread = new Thread(ProcessURL);
+                    ActiveThreads++;
+                    View.Print($"INC Active threads: {ActiveThreads}");
+                    thread.Start();
+                }
+            }
+
+            Thread.Sleep(10); // short sleep
+        }
+
+        View.Print($"---END OF PARALLEL CRAWLING---");
         return result;
     }
 
-    // fetch page content
-    public static async Task<string?> FetchPage(string url) {
+    // fetch page content, synchronous version
+    private static string? FetchPage(string url) {
         try {
             if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) { // allow only HTTP and HTTPS 
                 return null;
             }
 
-            return await httpClient.GetStringAsync(uri); // fetch the page content 
-
+            return httpClient.GetStringAsync(uri).GetAwaiter().GetResult(); // fetch the page content 
         } catch {
             return null;
         }
     }
 
     // search for keywords in the page content and return the found keywords
-    public static HashSet<string> FindKeywords(string page, List<string> keywords) {
+    private static HashSet<string> FindKeywords(string page, List<string> keywords) {
         HashSet<string> found = [];
 
         foreach (var keyword in keywords) {
@@ -401,7 +426,7 @@ public static class PWebCrawler {
     }
 
     // link extraction (search/extract new links from the page)
-    public static IEnumerable<string> ExtractLinks(string page, string baseUrl) {
+    private static IEnumerable<string> ExtractLinks(string page, string baseUrl) {
         // Regex search in 'page' for all links (href attributes) in the form of: href="something"
         //      - href          the word 'href'
         //      - \s*=\s*       an equals sign '=' (possibly surrounded by any amount of whitespace)
@@ -422,7 +447,7 @@ public static class PWebCrawler {
 
     // get the base domain from a URL
     // e.g. https://example.com/page.html   -> example.com
-    public static string GetBaseDomain(string url) {
+    private static string GetBaseDomain(string url) {
         if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
             url = "http://" + url;
         }
@@ -437,7 +462,7 @@ public static class PWebCrawler {
     // return url without fragment part (# part), but keep query part (if exists)
     // e.g
     // https://example.com/page.html?lang=en#section2   -> https://example.com/page.html?lang=en
-    public static string UrlWithoutFragment(string url) {
+    private static string UrlWithoutFragment(string url) {
         int fragmentIndex = url.IndexOf('#');
         return fragmentIndex >= 0 ? url.Substring(0, fragmentIndex) : url;
     }
@@ -448,13 +473,13 @@ public static class PWebCrawler {
     // https://example.com/media/video.mp4#t=30         -> https://example.com/media/video.mp4
     // https://example.com/images/photo.jpg?size=large  -> https://example.com/images/photo.jpg 
     // https://example.com/page.html?lang=en#section2   -> https://example.com/page.html
-    static string CleanUrl(string url) {
+    private static string CleanUrl(string url) {
         int index = url.IndexOfAny(new[] { '?', '#' });
         return index >= 0 ? url.Substring(0, index) : url;
     }
 
     // check if the content behind the URL is not relevant for keyword search
-    public static bool IsNonRelevant(string url) {
+    private static bool IsNonRelevant(string url) {
         // binary file or non-relevant page (e.g. .css) extensions
         string[] nonRelevantExtensions = {
             ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", // binary documents
