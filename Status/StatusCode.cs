@@ -11,4 +11,5 @@ public enum StatusCode {
     DbFileReadError,
     DbFileWriteError,
     InvalidNumberOfArguments,
+    InvalidArgument,
 }

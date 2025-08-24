@@ -71,6 +71,10 @@ public class CmdInterpreter(DB db) {
                 ListStartingPoints(cmd.Args);
                 break;
 
+            case "PSCAN":
+                PScan(cmd.Args);
+                break;
+
             case "SCAN":
                 Scan(cmd.Args);
                 break;
@@ -551,70 +555,82 @@ public class CmdInterpreter(DB db) {
         View.LogPrint("", true);
 
         // Start crawling
-        CrawlResult result = WebCrawler.Crawl(startingPoints, keywords).GetAwaiter().GetResult();
+        if (PWebCrawler.NumOfThreads > 1) {
+            Task.Run(async () => {
+                try {
+                    CrawlResult result = await PWebCrawler.Crawl(startingPoints, keywords);
+                    View.Print("Crawling completed successfully.");
+                }
+                catch (Exception _) {
+                }
+            });
+            View.Print("The parallel web crawling process has started.");
+        } else {
+            CrawlResult result = WebCrawler.Crawl(startingPoints, keywords).GetAwaiter().GetResult();
 
-        View.LogPrint("", true);
-        View.LogPrint("The web crawling process has finished.", true);
-        View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
+            View.LogPrint("", true);
+            View.LogPrint("The web crawling process has finished.", true);
+            View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
 
-        View.LogPrint("", true);
-        View.LogPrint(View.FullLine, true);
+            View.LogPrint("", true);
+            View.LogPrint(View.FullLine, true);
 
-        // removes all existing page/keywords connection for specified starting points and keywords
-        // (new page/keywords connections will be added later)
-        var count = names.Count * keywords.Count;
-        if (count > 0) {
-            foreach (string spName in names) {
-                foreach (string keyword in keywords) {
-                    var pageIDs = GetCommonPageIDs(spName, keyword);
-                    foreach (var pageID in pageIDs) {
-                        Db.RemovePageKeywordConnection(keyword, pageID);
+            // removes all existing page/keywords connection for specified starting points and keywords
+            // (new page/keywords connections will be added later)
+            var count = names.Count * keywords.Count;
+            if (count > 0) {
+                foreach (string spName in names) {
+                    foreach (string keyword in keywords) {
+                        var pageIDs = GetCommonPageIDs(spName, keyword);
+                        foreach (var pageID in pageIDs) {
+                            Db.RemovePageKeywordConnection(keyword, pageID);
+                        }
                     }
                 }
+                View.LogPrint($"Clearing the obsolete page-keywords connections from the database... completed successfully.", true);
             }
-            View.LogPrint($"Clearing the obsolete page-keywords connections from the database... completed successfully.", true);
-        }
 
-        // create new page/keywords connections in the database based on result.UrlToKeywords
-        var pageCount = result.UrlToKeywords.Count;
-        if (pageCount > 0) {
-            foreach (var url in result.UrlToKeywords) { // for all found URLs
-                var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
-                                                       // create new page
-                DBPage page = new() {
-                    Name = spName,
-                    URL = url.Key,
-                    Keywords = keywordsSet
-                };
+            // create new page/keywords connections in the database based on result.UrlToKeywords
+            var pageCount = result.UrlToKeywords.Count;
+            if (pageCount > 0) {
+                foreach (var url in result.UrlToKeywords) { // for all found URLs
+                    var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
+                                                        // create new page
+                    DBPage page = new() {
+                        Name = spName,
+                        URL = url.Key,
+                        Keywords = keywordsSet
+                    };
 
-                Db.AddPage(page); // add page to the database
-            }
-            View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
-        } else {
-            View.LogPrint("No page-keywords connections found.", true);
-        }
-        View.LogPrint(View.FullLine, true);
-
-        if (result.UrlToKeywords.Count > 0) {
-            View.LogPrint();
-            View.LogPrint("Crawling results:");
-            foreach (var url in result.UrlToKeywords) {
-                View.LogPrint($"URL: {url.Key}");
-                View.LogPrint($"    Starting point: {url.Value.spName}");
-                View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
-            }
-            View.LogPrint();
-            foreach (var keyword in result.KeywordToUrls) {
-                View.LogPrint($"Keyword: {keyword.Key}");
-                foreach (var matchUrl in keyword.Value.urlSet) {
-                    View.LogPrint($"    -> {matchUrl}");
+                    Db.AddPage(page); // add page to the database
                 }
+                View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
+            } else {
+                View.LogPrint("No page-keywords connections found.", true);
             }
-            View.LogPrint();
-            View.LogPrint(View.FullLine);
-        }
+            View.LogPrint(View.FullLine, true);
 
-        View.LogClose();
+            if (result.UrlToKeywords.Count > 0) {
+                View.LogPrint();
+                View.LogPrint("Crawling results:");
+                foreach (var url in result.UrlToKeywords) {
+                    View.LogPrint($"URL: {url.Key}");
+                    View.LogPrint($"    Starting point: {url.Value.spName}");
+                    View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
+                }
+                View.LogPrint();
+                foreach (var keyword in result.KeywordToUrls) {
+                    View.LogPrint($"Keyword: {keyword.Key}");
+                    foreach (var matchUrl in keyword.Value.urlSet) {
+                        View.LogPrint($"    -> {matchUrl}");
+                    }
+                }
+                View.LogPrint();
+                View.LogPrint(View.FullLine);
+            }
+
+            View.LogClose();
+        }
     }
 
     // returns the set of common page IDs for a given name and keyword
@@ -694,6 +710,43 @@ public class CmdInterpreter(DB db) {
         } else {
             StatusCode = StatusCode.UnknownLogCommand;
             View.PrintStatus(StatusCode);
+        }
+    }
+
+    private void PScan(string[] args) {
+        if (args.Length > 1) {
+            StatusCode = StatusCode.InvalidNumberOfArguments;
+            View.PrintStatus(StatusCode);
+            return;
+        }
+
+        if (args.Length == 0) { // no arguments, print current status
+            PrintPScanStatus();
+        } else { // argument provided, set number of threads
+            bool invalidArgument = false;
+            if (int.TryParse(args[0], out int numOfThreads)) {
+                if (numOfThreads < 1 || numOfThreads > PWebCrawler.MaxNumOfThreads) {
+                    invalidArgument = true;
+                } else {
+                    PWebCrawler.NumOfThreads = numOfThreads;
+                    PrintPScanStatus();
+                }
+            } else {
+                invalidArgument = true;
+            }
+            if (invalidArgument) {
+                StatusCode = StatusCode.InvalidArgument;
+                View.PrintStatus(StatusCode);
+                View.Print("Valid range is 1 to " + PWebCrawler.MaxNumOfThreads);
+            }
+        }
+    }
+
+    static void PrintPScanStatus() {
+        if (PWebCrawler.NumOfThreads > 1) {
+            View.Print("Parallel web crawling is enabled. Number of threads: " + PWebCrawler.NumOfThreads);
+        } else {
+            View.Print("Parallel web crawling is disabled.");
         }
     }
 }

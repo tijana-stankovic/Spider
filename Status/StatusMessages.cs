@@ -12,6 +12,7 @@ public class StatusMessages {
         { StatusCode.DbFileReadError, "ERROR: An error occurred while reading the database file." },
         { StatusCode.DbFileWriteError, "ERROR: An error occurred while writing to the database file." },
         { StatusCode.InvalidNumberOfArguments, "ERROR: Invalid number of arguments." },
+        { StatusCode.InvalidArgument, "ERROR: Invalid argument value." },
     };
 
     public static string GetStatusMessage(StatusCode statusCode) {
