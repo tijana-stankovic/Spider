@@ -589,12 +589,59 @@ public class CmdInterpreter(DB db) {
             Task.Run(() => {
                 // TODO: lock
                 PWebCrawler.PScanActive = true;
-
+                CrawlResult? result = null;
                 try {
-                    CrawlResult result = PWebCrawler.Crawl(startingPoints, keywords);
+                    result = PWebCrawler.Crawl(startingPoints, keywords);
                     View.LogPrint("The parallel crawling completed successfully.", false); // print only to log !
                 }
                 catch (Exception _) {
+                }
+
+                if (result != null) {
+                    // Process the result
+                    View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
+
+                    View.LogPrint("", true);
+                    View.LogPrint(View.FullLine, true);
+
+                    // create new page/keywords connections in the database based on result.UrlToKeywords
+                    var pageCount = result.UrlToKeywords.Count;
+                    if (pageCount > 0) {
+                        foreach (var url in result.UrlToKeywords) { // for all found URLs
+                            var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
+                                                                // create new page
+                            DBPage page = new() {
+                                Name = spName,
+                                URL = url.Key,
+                                Keywords = keywordsSet
+                            };
+
+                            Db.AddPage(page); // add page to the database
+                        }
+                        View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
+                    } else {
+                        View.LogPrint("No page-keywords connections found.", true);
+                    }
+                    View.LogPrint(View.FullLine, true);
+
+                    if (result.UrlToKeywords.Count > 0) {
+                        View.LogPrint();
+                        View.LogPrint("Crawling results:");
+                        foreach (var url in result.UrlToKeywords) {
+                            View.LogPrint($"URL: {url.Key}");
+                            View.LogPrint($"    Starting point: {url.Value.spName}");
+                            View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
+                        }
+                        View.LogPrint();
+                        foreach (var keyword in result.KeywordToUrls) {
+                            View.LogPrint($"Keyword: {keyword.Key}");
+                            foreach (var matchUrl in keyword.Value.urlSet) {
+                                View.LogPrint($"    -> {matchUrl}");
+                            }
+                        }
+                        View.LogPrint();
+                        View.LogPrint(View.FullLine);
+                    }
                 }
 
                 View.LogClose();

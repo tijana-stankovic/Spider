@@ -281,13 +281,13 @@ public static class PWebCrawler {
                 }
 
                 // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
-                if (IsNonRelevant(task.url)) {
+                if (WebCrawler.IsNonRelevant(task.url)) {
                     continue;
                 }
 
                 lock (resultLock) {
                     // if URL is already visited, skip it
-                    if (result.VisitedUrls.Contains(UrlWithoutFragment(task.url))) {
+                    if (result.VisitedUrls.Contains(WebCrawler.UrlWithoutFragment(task.url))) {
                         continue;
                     }
                 }
@@ -298,7 +298,7 @@ public static class PWebCrawler {
                 }
 
                 lock (resultLock) {
-                    result.VisitedUrls.Add(UrlWithoutFragment(task.url)); // add URL to visited list
+                    result.VisitedUrls.Add(WebCrawler.UrlWithoutFragment(task.url)); // add URL to visited list
                 }
 
                 // *******************************************************
@@ -312,7 +312,7 @@ public static class PWebCrawler {
                 }
 
                 // search for keywords
-                var foundKeywords = FindKeywords(page, keywords);
+                var foundKeywords = WebCrawler.FindKeywords(page, keywords);
                 if (foundKeywords.Count > 0) {
                     lock (resultLock) {
                         result.UrlToKeywords[task.url] = (foundKeywords, task.spName); 
@@ -330,20 +330,20 @@ public static class PWebCrawler {
 
                 // link extraction (search/extract new links from the page)
                 int newInternalLinks = 0, newExternalLinks = 0;
-                foreach (var link in ExtractLinks(page, task.url)) { // process found links and add new ones to the queue
+                foreach (var link in WebCrawler.ExtractLinks(page, task.url)) { // process found links and add new ones to the queue
 
                     // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
-                    if (IsNonRelevant(link)) {
+                    if (WebCrawler.IsNonRelevant(link)) {
                         continue;
                     }
 
                     // if URL is already visited, skip it
-                    if (result.VisitedUrls.Contains(UrlWithoutFragment(link))) { 
+                    if (result.VisitedUrls.Contains(WebCrawler.UrlWithoutFragment(link))) { 
                         continue;
                     }
 
-                    string baseDomain = GetBaseDomain(task.spURL); // base of starting point URL
-                    string linkDomain = GetBaseDomain(link); // base of found link URL
+                    string baseDomain = WebCrawler.GetBaseDomain(task.spURL); // base of starting point URL
+                    string linkDomain = WebCrawler.GetBaseDomain(link); // base of found link URL
 
                     if (string.Equals(baseDomain, linkDomain, StringComparison.OrdinalIgnoreCase)) { // same base => internal link
                         if (task.internalLeft > 0) {
@@ -421,97 +421,5 @@ public static class PWebCrawler {
         } catch {
             return null;
         }
-    }
-
-    // search for keywords in the page content and return the found keywords
-    private static HashSet<string> FindKeywords(string page, List<string> keywords) {
-        HashSet<string> found = [];
-
-        foreach (var keyword in keywords) {
-            // Match whole words only (if the word is part of another word, it won't be matched)
-            string pattern = $@"\b{Regex.Escape(keyword)}\b";
-            if (Regex.IsMatch(page, pattern, RegexOptions.IgnoreCase)) {
-                found.Add(keyword);
-            }
-        }
-
-        return found;
-    }
-
-    // link extraction (search/extract new links from the page)
-    private static IEnumerable<string> ExtractLinks(string page, string baseUrl) {
-        // Regex search in 'page' for all links (href attributes) in the form of: href="something"
-        //      - href          the word 'href'
-        //      - \s*=\s*       an equals sign '=' (possibly surrounded by any amount of whitespace)
-        //      - ["']          either a double quote " or single quote '
-        //      - ([^""']+)     one or more characters that are not quotes (actual URL)
-        //      - ["']          the closing quote
-        var matches = Regex.Matches(page, @"href\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? baseUri)) {
-            yield break;
-        }
-
-        foreach (Match match in matches) {
-            string href = match.Groups[1].Value;
-            if (Uri.TryCreate(baseUri, href, out Uri? fullUri))
-                yield return fullUri.ToString();
-        }
-    }
-
-    // get the base domain from a URL
-    // e.g. https://example.com/page.html   -> example.com
-    private static string GetBaseDomain(string url) {
-        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
-            url = "http://" + url;
-        }
-
-        if (Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)) {
-            return uri.Host.ToLowerInvariant();
-        }
-
-        return string.Empty;
-    }
-
-    // return url without fragment part (# part), but keep query part (if exists)
-    // e.g
-    // https://example.com/page.html?lang=en#section2   -> https://example.com/page.html?lang=en
-    private static string UrlWithoutFragment(string url) {
-        int fragmentIndex = url.IndexOf('#');
-        return fragmentIndex >= 0 ? url.Substring(0, fragmentIndex) : url;
-    }
-
-    // extract 'clean' URL from a complex URL, with query strings (?) and/or fragments (#)
-    // (removes query parameters and fragment identifiers (e.g., ?id=123, #section) from the url)
-    // e.g
-    // https://example.com/media/video.mp4#t=30         -> https://example.com/media/video.mp4
-    // https://example.com/images/photo.jpg?size=large  -> https://example.com/images/photo.jpg 
-    // https://example.com/page.html?lang=en#section2   -> https://example.com/page.html
-    private static string CleanUrl(string url) {
-        int index = url.IndexOfAny(new[] { '?', '#' });
-        return index >= 0 ? url.Substring(0, index) : url;
-    }
-
-    // check if the content behind the URL is not relevant for keyword search
-    private static bool IsNonRelevant(string url) {
-        // binary file or non-relevant page (e.g. .css) extensions
-        string[] nonRelevantExtensions = {
-            ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", // binary documents
-            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", // image files
-            ".mp3", ".wav", ".mp4", ".avi", // audio/video files
-            ".zip", ".rar", ".exe", ".msi", // archive/installer files
-            ".js", ".css" // script/style files
-        };
-
-        url = url.Trim().ToLower();
-        // skip fragment identifiers and non-HTTP(S) URLs
-        if (url.StartsWith('#') || url.StartsWith("javascript:") || url.StartsWith("mailto:"))
-            return true;
-
-        url = CleanUrl(url); // remove query parameters and fragment identifiers
-        // skip non-relevant URLs (binary files, images, etc.)
-        if (nonRelevantExtensions.Any(ext => url.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
-            return true;
-
-        return false;
     }
 }
