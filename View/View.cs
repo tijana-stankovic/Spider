@@ -1,7 +1,7 @@
 namespace SpiderView;
 
 using SpiderStatus;
-using SpiderDB;
+using SpiderHttp;
 using System;
 using System.Collections.Generic;
 
@@ -41,6 +41,10 @@ public class View {
     }
 
     static public void PrintPrompt() {
+        if (PWebCrawler.PScanActive) {
+            // TODO: lock
+            Print($"[P:{PWebCrawler.ActiveThreads}] ", false);
+        }
         string prompt = "> ";
         Print(prompt, false);
     }

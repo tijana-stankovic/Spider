@@ -595,14 +595,15 @@ public class CmdInterpreter(DB db) {
                     View.LogPrint("The parallel crawling completed successfully.", false); // print only to log !
                 }
                 catch (Exception _) {
+                    // TODO: log error
                 }
 
                 if (result != null) {
                     // Process the result
-                    View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
+                    View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true); // TODO: print only to log !
 
-                    View.LogPrint("", true);
-                    View.LogPrint(View.FullLine, true);
+                    View.LogPrint("", true); // TODO: print only to log !
+                    View.LogPrint(View.FullLine, true); // TODO: print only to log !
 
                     // create new page/keywords connections in the database based on result.UrlToKeywords
                     var pageCount = result.UrlToKeywords.Count;
@@ -618,11 +619,11 @@ public class CmdInterpreter(DB db) {
 
                             Db.AddPage(page); // add page to the database
                         }
-                        View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
+                        View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true); // TODO: print only to log !
                     } else {
-                        View.LogPrint("No page-keywords connections found.", true);
+                        View.LogPrint("No page-keywords connections found.", true); // TODO: print only to log !
                     }
-                    View.LogPrint(View.FullLine, true);
+                    View.LogPrint(View.FullLine, true); // TODO: print only to log !
 
                     if (result.UrlToKeywords.Count > 0) {
                         View.LogPrint();

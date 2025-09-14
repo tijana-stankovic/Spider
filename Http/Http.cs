@@ -193,6 +193,8 @@ public static class WebCrawler {
     // get the base domain from a URL
     // e.g. https://example.com/page.html   -> example.com
     public static string GetBaseDomain(string url) {
+        if (url == null) return "";
+
         if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
             url = "http://" + url;
         }
@@ -208,6 +210,8 @@ public static class WebCrawler {
     // e.g
     // https://example.com/page.html?lang=en#section2   -> https://example.com/page.html?lang=en
     public static string UrlWithoutFragment(string url) {
+        if (url == null) return "";
+
         int fragmentIndex = url.IndexOf('#');
         return fragmentIndex >= 0 ? url.Substring(0, fragmentIndex) : url;
     }
@@ -233,6 +237,9 @@ public static class WebCrawler {
             ".zip", ".rar", ".exe", ".msi", // archive/installer files
             ".js", ".css" // script/style files
         };
+
+        if (url == null) // if URL is null, consider it non-relevant
+            return true;
 
         url = url.Trim().ToLower();
         // skip fragment identifiers and non-HTTP(S) URLs
@@ -277,7 +284,7 @@ public static class PWebCrawler {
                 lock (tasksLock) {
                     if (tasks.Count == 0) break; // if the task queue is empty, exit the loop
                     task = tasks.Dequeue(); // get the next task (URL)
-                    View.Print($"Get URL: {task.url}");
+//                    View.Print($"Get URL: {task.url}");
                 }
 
                 // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
@@ -304,7 +311,7 @@ public static class PWebCrawler {
                 // *******************************************************
                 string? page = FetchPage(task.url); // fetch page content
                 // *******************************************************
-                View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");
+                // View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");
 
                 // if page could not be fetched, skip it
                 if (page == null) { 
@@ -366,7 +373,7 @@ public static class PWebCrawler {
             // this thread finishes, so decrement the active thread count
             lock (activeThreads) {
                 ActiveThreads--;
-                View.Print($"DEC Active threads: {ActiveThreads}");
+                // View.Print($"DEC Active threads: {ActiveThreads}");
             }
         } // end of ProcessURL() helper function
 
@@ -397,7 +404,7 @@ public static class PWebCrawler {
                 if (tasks.Count > 0 && ActiveThreads < NumOfThreads && ActiveThreads < MaxNumOfThreads) {
                     var thread = new Thread(ProcessURL); // create a new thread
                     ActiveThreads++;
-                    View.Print($"INC Active threads: {ActiveThreads}");
+                    // View.Print($"INC Active threads: {ActiveThreads}");
                     thread.Start(); // launch the thread
                 }
             }
@@ -405,7 +412,7 @@ public static class PWebCrawler {
             Thread.Sleep(10); // short sleep
         }
 
-        View.Print($"---END OF PARALLEL CRAWLING---");
+        // View.Print($"---END OF PARALLEL CRAWLING---");
         return result;
     }
 
