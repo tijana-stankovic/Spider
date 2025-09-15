@@ -140,6 +140,12 @@ public class CmdInterpreter(DB db) {
         View.Print("  Short form for LIST KEYWORDS command. For details, see LIST command.");
         View.Print("- LN (LS)");
         View.Print("  Short form for LIST NAMES (LIST STARTINGPOINTS) command. For details, see LIST command.");
+        View.Print("- PSCAN [<number-of-threads>]");
+        View.Print("  Sets the maximum number of threads used during the web crawling process,");
+        View.Print("  enabling or disabling parallel crawling based on the specified value:");
+        View.Print("     - Value = 1: Parallel web crawling is disabled. Crawling is performed sequentially.");
+        View.Print("     - Value > 1: Parallel web crawling is enabled, using up to the specified number of threads.");
+        View.Print("  If the parameter is omitted, shows parallel crawling status and max number of threads.");
         View.Print("- SCAN");
         View.Print("    - SCAN [<name-list>] [<keyword-list>]");
         View.Print("      Start web crawling for the specified names and keywords.");
