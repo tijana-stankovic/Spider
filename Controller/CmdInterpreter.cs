@@ -520,14 +520,12 @@ public class CmdInterpreter(DB db) {
     // customNames, customKeywords = user specified set of names and/or keywords
     private void Scan(List<string>? customNames, List<string>? customKeywords) {
         // if parallel crawling is already active, print warning and exit immediately
-        // TODO: lock
-        if (PWebCrawler.PScanActive) {
+        if (PWebCrawler.IsPScanActive(out int activeThreads)) {
             View.Print("Warning: Parallel crawling is already in progress.");
             View.Print("         Please wait for it to complete...");
 
-            // TODO: lock
-            if (PWebCrawler.ActiveThreads > 0) {
-                View.Print($"         Currently active crawling threads: {PWebCrawler.ActiveThreads}");
+            if (activeThreads > 0) {
+                View.Print($"         Currently active crawling threads: {activeThreads}");
             }
 
             return;
@@ -587,21 +585,24 @@ public class CmdInterpreter(DB db) {
         }
 
         // Start crawling
-        if (PWebCrawler.NumOfThreads > 1) { // parallel crawling
+        if (PWebCrawler.MaxNumOfThreads > 1) { // parallel crawling
             View.LogPrint("", true);
             View.LogPrint("The parallel web crawling process has started in the background.", true);
             View.LogPrint("", true);
 
             Task.Run(() => {
-                // TODO: lock
+                // NOTE:
+                // during parallel crawling, messages from parallel threads will be printed only to log,
+                // otherwise, they would be mixed with the main thread output in unpredictable ways
                 PWebCrawler.PScanActive = true;
                 CrawlResult? result = null;
                 try {
                     result = PWebCrawler.Crawl(startingPoints, keywords);
-                    View.LogPrint("The parallel crawling completed successfully.", false); // print only to log !
+                    View.LogPrint("The parallel crawling completed successfully.", false); // false => print to log only
                 }
-                catch (Exception _) {
-                    // TODO: log error
+                catch (Exception ex) {
+                    // Log exception message
+                    View.LogPrint($"Error during parallel crawling: {ex.Message}", false);
                 }
 
                 if (result != null) {
@@ -652,7 +653,6 @@ public class CmdInterpreter(DB db) {
                 }
 
                 View.LogClose();
-                // TODO: lock
                 PWebCrawler.PScanActive = false;
             });
         } else { // sequential crawling
@@ -803,11 +803,18 @@ public class CmdInterpreter(DB db) {
             PrintPScanStatus();
         } else { // argument provided, set number of threads
             bool invalidArgument = false;
-            if (int.TryParse(args[0], out int numOfThreads)) {
-                if (numOfThreads < 1 || numOfThreads > PWebCrawler.MaxNumOfThreads) {
+            if (int.TryParse(args[0], out int newMaxNumOfThreads)) {
+                // if parallel crawling is already active, print warning and exit immediately
+                if (PWebCrawler.PScanActive) {
+                    View.Print("Warning: Parallel crawling is already in progress.");
+                    View.Print("         Please, wait until it finishes to change the number of threads.");
+                    return;
+                }
+
+                if (newMaxNumOfThreads < 1 || newMaxNumOfThreads > PWebCrawler.MaxAllowedNumOfThreads) {
                     invalidArgument = true;
                 } else {
-                    PWebCrawler.NumOfThreads = numOfThreads;
+                    PWebCrawler.MaxNumOfThreads = newMaxNumOfThreads;
                     PrintPScanStatus();
                 }
             } else {
@@ -816,14 +823,14 @@ public class CmdInterpreter(DB db) {
             if (invalidArgument) {
                 StatusCode = StatusCode.InvalidArgument;
                 View.PrintStatus(StatusCode);
-                View.Print("Valid range is 1 to " + PWebCrawler.MaxNumOfThreads);
+                View.Print("Valid range is 1 to " + PWebCrawler.MaxAllowedNumOfThreads);
             }
         }
     }
 
     static void PrintPScanStatus() {
-        if (PWebCrawler.NumOfThreads > 1) {
-            View.Print("Parallel web crawling is enabled. Number of threads: " + PWebCrawler.NumOfThreads);
+        if (PWebCrawler.MaxNumOfThreads > 1) {
+            View.Print("Parallel web crawling is enabled. Number of threads: " + PWebCrawler.MaxNumOfThreads);
         } else {
             View.Print("Parallel web crawling is disabled.");
         }

@@ -258,14 +258,55 @@ public static class WebCrawler {
 // ***************************************************************
 // parallel web crawler
 public static class PWebCrawler {
-    public static readonly int MaxNumOfThreads = 99; // max allowed number of threads
-    public static int NumOfThreads { get; set; } = 1; // number of allowed threads, 1 = no parallelism
+    public static readonly int MaxAllowedNumOfThreads = 99; // max allowed number of threads
+    public static int MaxNumOfThreads { get; set; } = 1; // max currently allowed number of threads, 1 = no parallelism
 
-    public static bool PScanActive { get; set; } = false; // is parallel scanning active or not
-    public static object pscanActive = new();
+    private static bool _pScanActive = false; // is parallel scanning active or not
+    private static readonly object _pScanActiveLock = new(); // lock object for _pScanActive
 
-    public static int ActiveThreads { get; set; } = 0; // number of currently active threads
-    public static object activeThreads = new();
+    private static int _numOfActiveThreads = 0; // number of currently active threads
+    private static readonly object _numOfActiveThreadsLock = new(); // lock object for _numOfActiveThreads
+
+    // thread-safe property
+    public static bool PScanActive {
+        get {
+            lock (_pScanActiveLock) {
+                return _pScanActive;
+            }
+        }
+        set {
+            lock (_pScanActiveLock) {
+                _pScanActive = value;
+            }
+        }
+    }
+
+    // thread-safe property
+    public static int ActiveThreads {
+        get {
+            lock (_numOfActiveThreadsLock) {
+                return _numOfActiveThreads;
+            }
+        }
+        set {
+            lock (_numOfActiveThreadsLock) {
+                _numOfActiveThreads = value;
+            }
+        }
+    }
+
+    // thread-safe helper method to:
+    // - check if parallel scanning is active and 
+    // - return number of active threads
+    public static bool IsPScanActive(out int activeThreads) {
+        // lock both objects in a consistent order to avoid deadlocks
+        lock (_pScanActiveLock) {
+            lock (_numOfActiveThreadsLock) {
+                activeThreads = _numOfActiveThreads;
+                return _pScanActive;
+            }
+        }
+    }
 
     private static readonly HttpClient httpClient = new();
 
@@ -345,8 +386,10 @@ public static class PWebCrawler {
                     }
 
                     // if URL is already visited, skip it
-                    if (result.VisitedUrls.Contains(WebCrawler.UrlWithoutFragment(link))) { 
-                        continue;
+                    lock (resultLock) {
+                        if (result.VisitedUrls.Contains(WebCrawler.UrlWithoutFragment(link))) { 
+                            continue;
+                        }
                     }
 
                     string baseDomain = WebCrawler.GetBaseDomain(task.spURL); // base of starting point URL
@@ -357,23 +400,30 @@ public static class PWebCrawler {
                             if (task.baseUrl != "" && !link.StartsWith(task.baseUrl, StringComparison.OrdinalIgnoreCase)) { // if the base URL is specified, check it
                                 // New internal link found, but skipped (URL doesn't match base URL): "
                             } else {
-                                tasks.Enqueue((link, task.internalLeft - 1, task.externalLeft, task.spName, task.baseUrl, task.spURL));
+                                lock (tasksLock) {
+                                    tasks.Enqueue((link, task.internalLeft - 1, task.externalLeft, task.spName, task.baseUrl, task.spURL));
+                                }
                                 newInternalLinks++;
                             }
                         } else { // New internal link found, but skipped (too far from the starting point)
+                            // do nothing -> skip this internal link
                         }
                     } else if (task.externalLeft > 0) { // different base => external link
-                        tasks.Enqueue((link, task.internalLeft, task.externalLeft - 1, task.spName, "", task.spURL)); // external link doesn't have to match base URL
+                        lock (tasksLock) {
+                            tasks.Enqueue((link, task.internalLeft, task.externalLeft - 1, task.spName, "", task.spURL)); // external link doesn't have to match base URL
+                        }
                         newExternalLinks++;
-                    } else { // New external link found, but skipped (too far from the starting point)
+                    } else { 
+                        // New external link found, but skipped (too far from the starting point)
+                        // do nothing -> skip this external link
                     }
                 }
             }
 
             // this thread finishes, so decrement the active thread count
-            lock (activeThreads) {
-                ActiveThreads--;
-                // View.Print($"DEC Active threads: {ActiveThreads}");
+            lock (_numOfActiveThreadsLock) {
+                _numOfActiveThreads--;
+                // View.Print($"DEC Active threads: {_numOfActiveThreads}");
             }
         } // end of ProcessURL() helper function
 
@@ -394,18 +444,20 @@ public static class PWebCrawler {
         // until all links are exhausted (queue is empty) and no active threads are running
         // this is a main crawling loop, where parallel threads are created and launched
         while (true) {
-            lock (tasksLock) lock (activeThreads) {
-                if (tasks.Count == 0 && ActiveThreads == 0) {
-                    // finish processing when the task queue is empty (no more URLs) and 
-                    // no active threads are running
-                    break; 
-                }
+            lock (tasksLock) {
+                lock (_numOfActiveThreadsLock) {
+                    if (tasks.Count == 0 && _numOfActiveThreads == 0) {
+                        // finish processing when the task queue is empty (no more URLs) and 
+                        // no active threads are running
+                        break; 
+                    }
 
-                if (tasks.Count > 0 && ActiveThreads < NumOfThreads && ActiveThreads < MaxNumOfThreads) {
-                    var thread = new Thread(ProcessURL); // create a new thread
-                    ActiveThreads++;
-                    // View.Print($"INC Active threads: {ActiveThreads}");
-                    thread.Start(); // launch the thread
+                    if (tasks.Count > 0 && _numOfActiveThreads < MaxNumOfThreads && _numOfActiveThreads < MaxAllowedNumOfThreads) {
+                        var thread = new Thread(ProcessURL); // create a new thread
+                        _numOfActiveThreads++;
+                        // View.Print($"INC Active threads: {_numOfActiveThreads}");
+                        thread.Start(); // launch the thread
+                    }
                 }
             }
 

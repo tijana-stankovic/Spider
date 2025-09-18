@@ -41,9 +41,8 @@ public class View {
     }
 
     static public void PrintPrompt() {
-        if (PWebCrawler.PScanActive) {
-            // TODO: lock
-            Print($"[P:{PWebCrawler.ActiveThreads}] ", false);
+        if (PWebCrawler.IsPScanActive(out int activeThreads)) {
+            Print($"[PScan active... {activeThreads} thread(s)] ", false);
         }
         string prompt = "> ";
         Print(prompt, false);
