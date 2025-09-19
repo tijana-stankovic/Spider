@@ -10,8 +10,22 @@ public class CmdInterpreter(DB db) {
     public StatusCode StatusCode { get; set; } = StatusCode.NoError;
     public bool QuitSignal { get; set; } = false;
 
+    // result of the last parallel crawl
+    private CrawlResult? _pCrawlResult = null;
+
     public void ExecuteCommand(Command cmd) {
         StatusCode = StatusCode.NoError;
+
+        // if parallel crawling is not active
+        if (!PWebCrawler.PScanActive) {
+            // if last parallel crawl result is not saved to DB
+            if (_pCrawlResult != null) {
+                View.Print("Parallel crawling is finished.");
+                SaveCrawlResult(_pCrawlResult);
+                View.LogClose();
+                _pCrawlResult = null;
+            }
+        }
 
         string command = cmd.Name.ToUpper();
 
@@ -519,8 +533,10 @@ public class CmdInterpreter(DB db) {
 
     // customNames, customKeywords = user specified set of names and/or keywords
     private void Scan(List<string>? customNames, List<string>? customKeywords) {
-        // if parallel crawling is already active, print warning and exit immediately
-        if (PWebCrawler.IsPScanActive(out int activeThreads)) {
+        // if parallel crawling is already active or last parallel crawl result is not saved to DB, 
+        // print warning and exit immediately
+        // (this prevents more than one Scan command to be executed at the same time)
+        if (PWebCrawler.IsPScanActive(out int activeThreads) || _pCrawlResult != null) {
             View.Print("Warning: Parallel crawling is already in progress.");
             View.Print("         Please wait for it to complete...");
 
@@ -590,14 +606,16 @@ public class CmdInterpreter(DB db) {
             View.LogPrint("The parallel web crawling process has started in the background.", true);
             View.LogPrint("", true);
 
+            // prevent more than one Scan command to be executed at the same time
+            PWebCrawler.PScanActive = true;
+            
             Task.Run(() => {
                 // NOTE:
                 // during parallel crawling, messages from parallel threads will be printed only to log,
                 // otherwise, they would be mixed with the main thread output in unpredictable ways
-                PWebCrawler.PScanActive = true;
-                CrawlResult? result = null;
+                // TODO brisi   CrawlResult? result = null;
                 try {
-                    result = PWebCrawler.Crawl(startingPoints, keywords);
+                    _pCrawlResult = PWebCrawler.Crawl(startingPoints, keywords);
                     View.LogPrint("The parallel crawling completed successfully.", false); // false => print to log only
                 }
                 catch (Exception ex) {
@@ -605,57 +623,21 @@ public class CmdInterpreter(DB db) {
                     View.LogPrint($"Error during parallel crawling: {ex.Message}", false);
                 }
 
-                if (result != null) {
-                    // Process the result
-                    View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true); // TODO: print only to log !
-
-                    View.LogPrint("", true); // TODO: print only to log !
-                    View.LogPrint(View.FullLine, true); // TODO: print only to log !
-
-                    // create new page/keywords connections in the database based on result.UrlToKeywords
-                    var pageCount = result.UrlToKeywords.Count;
-                    if (pageCount > 0) {
-                        foreach (var url in result.UrlToKeywords) { // for all found URLs
-                            var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
-                                                                // create new page
-                            DBPage page = new() {
-                                Name = spName,
-                                URL = url.Key,
-                                Keywords = keywordsSet
-                            };
-
-                            Db.AddPage(page); // add page to the database
-                        }
-                        View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true); // TODO: print only to log !
-                    } else {
-                        View.LogPrint("No page-keywords connections found.", true); // TODO: print only to log !
-                    }
-                    View.LogPrint(View.FullLine, true); // TODO: print only to log !
-
-                    if (result.UrlToKeywords.Count > 0) {
-                        View.LogPrint();
-                        View.LogPrint("Crawling results:");
-                        foreach (var url in result.UrlToKeywords) {
-                            View.LogPrint($"URL: {url.Key}");
-                            View.LogPrint($"    Starting point: {url.Value.spName}");
-                            View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
-                        }
-                        View.LogPrint();
-                        foreach (var keyword in result.KeywordToUrls) {
-                            View.LogPrint($"Keyword: {keyword.Key}");
-                            foreach (var matchUrl in keyword.Value.urlSet) {
-                                View.LogPrint($"    -> {matchUrl}");
-                            }
-                        }
-                        View.LogPrint();
-                        View.LogPrint(View.FullLine);
-                    }
+                if (_pCrawlResult != null) {
+                    // NOTE
+                    // saving parallel crawl result here is postponed, to prevent shared access issues
+                    // so, the result is only printed to the log
+                    PrintCrawlResult(_pCrawlResult);
                 }
 
-                View.LogClose();
+                //View.LogClose();
+
+                // allow new Scan command to be executed
                 PWebCrawler.PScanActive = false;
             });
+
         } else { // sequential crawling
+
             View.LogPrint("", true);
             View.LogPrint("The web crawling process has started.", true);
             View.LogPrint("", true);
@@ -664,56 +646,18 @@ public class CmdInterpreter(DB db) {
 
             View.LogPrint("", true);
             View.LogPrint("The web crawling process has finished.", true);
-            View.LogPrint($"Number of pages visited: {result.VisitedUrls.Count}", true);
 
-            View.LogPrint("", true);
-            View.LogPrint(View.FullLine, true);
-
-            // create new page/keywords connections in the database based on result.UrlToKeywords
-            var pageCount = result.UrlToKeywords.Count;
-            if (pageCount > 0) {
-                foreach (var url in result.UrlToKeywords) { // for all found URLs
-                    var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
-                                                        // create new page
-                    DBPage page = new() {
-                        Name = spName,
-                        URL = url.Key,
-                        Keywords = keywordsSet
-                    };
-
-                    Db.AddPage(page); // add page to the database
-                }
-                View.LogPrint($"Creating new page-keywords connections in the database: {pageCount} ... completed successfully.", true);
-            } else {
-                View.LogPrint("No page-keywords connections found.", true);
-            }
-            View.LogPrint(View.FullLine, true);
-
-            if (result.UrlToKeywords.Count > 0) {
-                View.LogPrint();
-                View.LogPrint("Crawling results:");
-                foreach (var url in result.UrlToKeywords) {
-                    View.LogPrint($"URL: {url.Key}");
-                    View.LogPrint($"    Starting point: {url.Value.spName}");
-                    View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}");
-                }
-                View.LogPrint();
-                foreach (var keyword in result.KeywordToUrls) {
-                    View.LogPrint($"Keyword: {keyword.Key}");
-                    foreach (var matchUrl in keyword.Value.urlSet) {
-                        View.LogPrint($"    -> {matchUrl}");
-                    }
-                }
-                View.LogPrint();
-                View.LogPrint(View.FullLine);
-            }
+            // save crawl result to database
+            SaveCrawlResult(result);
+            // print crawl result
+            PrintCrawlResult(result);
 
             View.LogClose();
         }
     }
 
     // returns the set of common page IDs for a given name and keyword
-    public HashSet<int> GetCommonPageIDs(string name, string keyword) {
+    private HashSet<int> GetCommonPageIDs(string name, string keyword) {
         var namePages = Db.GetPageIDsWithName(name);
         var keywordPages = Db.GetPageIDsWithKeyword(keyword);
 
@@ -725,6 +669,64 @@ public class CmdInterpreter(DB db) {
         intersection.IntersectWith(keywordPages);
 
         return intersection;
+    }
+
+    // save crawl result to database
+    private void SaveCrawlResult(CrawlResult? result) {
+        if (result == null) {
+            return;
+        }
+
+        bool printToConsole = true;
+
+        View.LogPrint($"The number of pages visited: {result.VisitedUrls.Count}", printToConsole);
+        View.LogPrint(View.FullLine, printToConsole);
+
+        // create new page/keywords connections in the database based on result.UrlToKeywords
+        var pageCount = result.UrlToKeywords.Count;
+        if (pageCount > 0) {
+            View.LogPrint("Saving results to database...", printToConsole);
+            foreach (var url in result.UrlToKeywords) { // for all found URLs
+                var (keywordsSet, spName) = url.Value; // extract keywords and starting point name
+
+                // create new page
+                DBPage page = new() {
+                    Name = spName,
+                    URL = url.Key,
+                    Keywords = keywordsSet
+                };
+
+                Db.AddPage(page); // add page to the database
+            }
+            View.LogPrint($"Saving completed successfully. {pageCount} new page-keywords connection(s) were created in the database.", printToConsole);
+        } else {
+            View.LogPrint("No page-keywords connections found.", printToConsole);
+        }
+        View.LogPrint(View.FullLine, printToConsole);
+    }
+
+    // print crawl result to log
+    static private void PrintCrawlResult(CrawlResult result) {
+        if (result.UrlToKeywords.Count > 0) {
+            bool printToConsole = false;
+
+            View.LogPrint("", printToConsole);
+            View.LogPrint("Crawling results:", printToConsole);
+            foreach (var url in result.UrlToKeywords) {
+                View.LogPrint($"URL: {url.Key}", printToConsole);
+                View.LogPrint($"    Starting point: {url.Value.spName}", printToConsole);
+                View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}", printToConsole);
+            }
+            View.LogPrint("", printToConsole);
+            foreach (var keyword in result.KeywordToUrls) {
+                View.LogPrint($"Keyword: {keyword.Key}", printToConsole);
+                foreach (var matchUrl in keyword.Value.urlSet) {
+                    View.LogPrint($"    -> {matchUrl}", printToConsole);
+                }
+            }
+            View.LogPrint("", printToConsole);
+            View.LogPrint(View.FullLine, printToConsole);
+        }
     }
 
     private void Find(string[] args) {

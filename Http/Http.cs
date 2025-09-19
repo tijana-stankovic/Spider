@@ -66,7 +66,7 @@ public static class WebCrawler {
             // *******************************************************
             string? page = await FetchPage(url); // fetch page content
             // *******************************************************
-            View.Print($"Fetched {url}: {page?.Length ?? 0} characters"); // TODO: remove this (testing)
+            //View.Print($"Fetched {url}: {page?.Length ?? 0} characters"); // TODO: remove this (testing)
 
             // if page could not be fetched, skip it
             if (page == null) { 
@@ -352,7 +352,7 @@ public static class PWebCrawler {
                 // *******************************************************
                 string? page = FetchPage(task.url); // fetch page content
                 // *******************************************************
-                // View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");
+                // View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");// TODO: remove this (testing)
 
                 // if page could not be fetched, skip it
                 if (page == null) { 
