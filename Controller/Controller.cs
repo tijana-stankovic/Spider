@@ -4,6 +4,10 @@ using SpiderStatus;
 using SpiderDB;
 using SpiderView;
 
+/// <summary>
+/// The top-level class of the Controller.
+/// It initializes the other application and Controller parts and executes the main application loop.
+/// </summary>
 public class Controller {
     private DB Db { get; set; }
     private CmdInterpreter Interpreter { get; set; }
@@ -58,6 +62,11 @@ public class Controller {
         return fileName;
     }
 
+    /// <summary>
+    /// *** MAIN APPLICATION LOOP ***
+    /// Runs the main application loop.
+    /// Processes user commands until the "quit signal" (END command) is received.
+    /// </summary>
     public void Run() {
         View.Print();
 

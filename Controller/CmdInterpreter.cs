@@ -5,6 +5,10 @@ using SpiderStatus;
 using SpiderView;
 using SpiderHttp;
 
+/// <summary>
+/// This is the Command Interpreter - the main processing class of the Controller.
+/// It executes all commands of the Spider application and is responsible for communication with other parts.
+/// </summary>
 public class CmdInterpreter(DB db) {
     private DB Db { get; set; } = db;
     public StatusCode StatusCode { get; set; } = StatusCode.NoError;
@@ -613,12 +617,12 @@ public class CmdInterpreter(DB db) {
                 // NOTE:
                 // during parallel crawling, messages from parallel threads will be printed only to log,
                 // otherwise, they would be mixed with the main thread output in unpredictable ways
-                // TODO brisi   CrawlResult? result = null;
                 try {
                     _pCrawlResult = PWebCrawler.Crawl(startingPoints, keywords);
                     View.LogPrint("The parallel crawling completed successfully.", false); // false => print to log only
                 }
                 catch (Exception ex) {
+                    _pCrawlResult = null;
                     // Log exception message
                     View.LogPrint($"Error during parallel crawling: {ex.Message}", false);
                 }
@@ -712,15 +716,15 @@ public class CmdInterpreter(DB db) {
 
             View.LogPrint("", printToConsole);
             View.LogPrint("Crawling results:", printToConsole);
-            foreach (var url in result.UrlToKeywords) {
+            foreach (var url in result.UrlToKeywords.OrderBy(entry => entry.Key)) {
                 View.LogPrint($"URL: {url.Key}", printToConsole);
                 View.LogPrint($"    Starting point: {url.Value.spName}", printToConsole);
                 View.LogPrint($"    Found keywords: {string.Join(", ", url.Value.keywordsSet)}", printToConsole);
             }
             View.LogPrint("", printToConsole);
-            foreach (var keyword in result.KeywordToUrls) {
+            foreach (var keyword in result.KeywordToUrls.OrderBy(entry => entry.Key)) {
                 View.LogPrint($"Keyword: {keyword.Key}", printToConsole);
-                foreach (var matchUrl in keyword.Value.urlSet) {
+                foreach (var matchUrl in keyword.Value.urlSet.OrderBy(url => url)) {
                     View.LogPrint($"    -> {matchUrl}", printToConsole);
                 }
             }

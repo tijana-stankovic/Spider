@@ -8,7 +8,9 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using SpiderView;
 
-// result of crawling
+/// <summary>
+/// Represents the result of a web crawling operation.
+/// </summary>
 public class CrawlResult {
     // for every found keyword, a set of URLs containing that keyword is stored (with their starting point name)
     public Dictionary<string, (HashSet<string> urlSet, string spName)> KeywordToUrls { get; } = [];
@@ -20,6 +22,9 @@ public class CrawlResult {
     public HashSet<string> VisitedUrls { get; } = [];
 }
 
+/// <summary>
+/// A class with methods for performing sequential web crawling.
+/// </summary>
 public static class WebCrawler {
     private static readonly HttpClient httpClient = new();
 
@@ -66,7 +71,6 @@ public static class WebCrawler {
             // *******************************************************
             string? page = await FetchPage(url); // fetch page content
             // *******************************************************
-            //View.Print($"Fetched {url}: {page?.Length ?? 0} characters"); // TODO: remove this (testing)
 
             // if page could not be fetched, skip it
             if (page == null) { 
@@ -255,8 +259,9 @@ public static class WebCrawler {
     }
 }
 
-// ***************************************************************
-// parallel web crawler
+/// <summary>
+/// A class with methods for performing parallel web crawling.
+/// </summary>
 public static class PWebCrawler {
     public static readonly int MaxAllowedNumOfThreads = 99; // max allowed number of threads
     public static int MaxNumOfThreads { get; set; } = 1; // max currently allowed number of threads, 1 = no parallelism
@@ -325,7 +330,6 @@ public static class PWebCrawler {
                 lock (tasksLock) {
                     if (tasks.Count == 0) break; // if the task queue is empty, exit the loop
                     task = tasks.Dequeue(); // get the next task (URL)
-//                    View.Print($"Get URL: {task.url}");
                 }
 
                 // main filter (filter out non-relevant pages (e.g. binary files like images, txt files with code snippets, etc.))
@@ -352,7 +356,6 @@ public static class PWebCrawler {
                 // *******************************************************
                 string? page = FetchPage(task.url); // fetch page content
                 // *******************************************************
-                // View.Print($"Fetched {task.url}: {page?.Length ?? 0} characters");// TODO: remove this (testing)
 
                 // if page could not be fetched, skip it
                 if (page == null) { 
@@ -423,7 +426,6 @@ public static class PWebCrawler {
             // this thread finishes, so decrement the active thread count
             lock (_numOfActiveThreadsLock) {
                 _numOfActiveThreads--;
-                // View.Print($"DEC Active threads: {_numOfActiveThreads}");
             }
         } // end of ProcessURL() helper function
 
@@ -455,7 +457,6 @@ public static class PWebCrawler {
                     if (tasks.Count > 0 && _numOfActiveThreads < MaxNumOfThreads && _numOfActiveThreads < MaxAllowedNumOfThreads) {
                         var thread = new Thread(ProcessURL); // create a new thread
                         _numOfActiveThreads++;
-                        // View.Print($"INC Active threads: {_numOfActiveThreads}");
                         thread.Start(); // launch the thread
                     }
                 }
@@ -464,7 +465,6 @@ public static class PWebCrawler {
             Thread.Sleep(10); // short sleep
         }
 
-        // View.Print($"---END OF PARALLEL CRAWLING---");
         return result;
     }
 

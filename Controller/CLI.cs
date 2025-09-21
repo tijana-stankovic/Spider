@@ -5,6 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+/// <summary>
+/// Command Line Interface (CLI) class with methods for handling user input.
+/// </summary>
 public class CLI {
     static public Command ReadCommand() {
         List<string> argList = [];

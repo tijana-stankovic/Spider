@@ -3,6 +3,10 @@ namespace SpiderDB;
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// This class contains the internal representation of the DBPage object.
+/// It contains the internal structures and provides methods for manipulating DBPage data.
+/// </summary>
 public class DBPage {
     private int _id = 0;
     private string _name = ""; // page 'origin' (the name of the page we started from to get to this page)

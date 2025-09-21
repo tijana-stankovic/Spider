@@ -1,6 +1,9 @@
 namespace SpiderDB;
 
-// search starting point
+/// <summary>
+/// This class contains the internal representation of the starting point object.
+/// It contains the internal structures and provides methods for manipulating starting point data.
+/// </summary>
 public class StartingPoint(string name, string url, int intDepth, int extDepth, string baseUrl) {
     private string _name = name;
     private string _url = url;

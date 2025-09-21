@@ -2,6 +2,10 @@ namespace SpiderDB;
 
 using System.Collections.Generic;
 
+/// <summary>
+/// This class contains the internal representation of the Spider database.
+/// It contains the internal structures and provides methods for manipulating data (pages, starting point names, keywords, etc.) in the database.
+/// </summary>
 public class DBData {
     // for JSON deserialization (in DB.WriteDB()) to work properly,
     // we need this default (parameterless) constructor.

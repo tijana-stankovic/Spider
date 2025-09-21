@@ -5,6 +5,9 @@ using SpiderHttp;
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// A class with methods for displaying various information to the user and performing log data operations.
+/// </summary>
 public class View {
     public static string LogFileName { get; set; } = "spider_log.txt";
     private static StreamWriter? _logWriter = null;

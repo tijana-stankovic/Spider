@@ -7,6 +7,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
+/// <summary>
+/// The top-level class of the Spider database implementation.
+/// It provides methods for accessing the Spider database as a whole.
+/// </summary>
 public class DB {
     public static readonly string DefaultDbFilename = "spider_db.sdb";
     public static readonly string DefaultDbExtension = "sdb";
