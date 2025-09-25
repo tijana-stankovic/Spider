@@ -27,10 +27,13 @@ public class View {
         }
     }
 
+    /// <summary>
+    /// Displays information about the Spider application.
+    /// </summary>
     static public void FullProgramInfo() {
         string version = "1.0";
         string projectName = "Spider";
-        string course = "Searching the Web - NDBI038 - student project";
+        string course = "Programming in C# - NPRG035/NPRG038 - student project";
         string author = "Tijana Stankovic";
         string email = "tijana.stankovic@gmail.com";
         string university = "Charles University, Faculty of Mathematics and Physics";
@@ -55,6 +58,10 @@ public class View {
         Print(StatusMessages.GetStatusMessage(statusCode));
     }
 
+    /// <summary>
+    /// Prints the current database statistics.
+    /// </summary>
+    /// <param name="dbStatistics">A dictionary containing the database statistics.</param>
     static public void PrintDBStatistics(Dictionary<string, int> dbStatistics) {
         Print("Current database statistics:");
         int spNamesCount = dbStatistics["NAMES"];
@@ -78,6 +85,9 @@ public class View {
         }
     }
 
+    // --------------------
+    // Log handling methods
+    // --------------------
     public static void LogOpen() {
         if (_logWriter == null) {
             _logWriter = new StreamWriter(LogFileName, append: true);

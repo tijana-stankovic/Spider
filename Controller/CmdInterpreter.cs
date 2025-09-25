@@ -17,6 +17,10 @@ public class CmdInterpreter(DB db) {
     // result of the last parallel crawl
     private CrawlResult? _pCrawlResult = null;
 
+    /// <summary>
+    /// Entry point for command processing. Executes the specified command.
+    /// </summary>
+    /// <param name="cmd">The command to execute.</param>
     public void ExecuteCommand(Command cmd) {
         StatusCode = StatusCode.NoError;
 
@@ -117,6 +121,10 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// HELP command entry point.
+    /// Displays the help information (short description) for each command.
+    /// </summary>
     static private void Help() {
         View.Print("List of available commands:");
         View.Print("- HELP (H)");
@@ -187,10 +195,19 @@ public class CmdInterpreter(DB db) {
         View.Print("    Displays the current log settings.");
     }
 
+    /// <summary>
+    /// ABOUT command entry point. 
+    /// Displays information about the program.
+    /// </summary>
     static private void About() {
         View.FullProgramInfo();
     }
 
+    /// <summary>
+    /// EXIT command entry point.
+    /// Sets the request (quit signal) for exiting the program.
+    /// If there are unsaved changes, prompts the user to save them.
+    /// </summary>
     private void Exit() {
         if (Db.IsChanged()) {
             char response = CLI.AskYesNo("There are unsaved changes. Do you want to save them?", true);
@@ -215,6 +232,12 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// SAVE command entry point.
+    /// Saves the current state of the database to a file.
+    /// A new filename can be specified using the parameter.
+    /// </summary>
+    /// <param name="args">optional argument specifying the new filename</param>
     private void Save(string[] args) {
         if (args.Length > 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -254,6 +277,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// ADD command entry point.
+    /// Adds a specified Starting Point or keyword to the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void Add(string[] args) {
         if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY")) {
             AddKeyword(args[1..]);
@@ -299,6 +327,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// ADD KEYWORD command entry point.
+    /// Adds a specified keyword to the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void AddKeyword(string[] args) {
         if (args.Length != 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -320,6 +353,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// REMOVE command entry point.
+    /// Removes a specified Starting Point or keyword from the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void Remove(string[] args) {
         if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORD" || args[0].ToUpper() == "KEY")) {
             RemoveKeyword(args[1..]);
@@ -340,6 +378,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// REMOVE KEYWORD command entry point.
+    /// Removes a specified keyword from the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void RemoveKeyword(string[] args) {
         if (args.Length != 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -355,6 +398,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// LIST command entry point.
+    /// Display DB statistics or lists all Starting Points or keywords in the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void List(string[] args) {
         if (args.Length == 0) {
             View.PrintDBStatistics(Db.GetDBStatistics());
@@ -375,6 +423,11 @@ public class CmdInterpreter(DB db) {
         View.PrintStatus(StatusCode);
     }
 
+    /// <summary>
+    /// LIST KEYWORDS command entry point.
+    /// Lists all keywords in the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void ListKeywords(string[] args) {
         if (args.Length > 0) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -388,6 +441,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// LIST STARTINGPOINTS command entry point.
+    /// Lists all starting points in the database.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void ListStartingPoints(string[] args) {
         if (args.Length > 0) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -406,6 +464,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// SCAN command entry point.
+    /// Scans specified starting points for the specified keywords.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void Scan(string[] args) {
         if (args.Length >= 1 && (args[0].ToUpper() == "KEYWORDS" || args[0].ToUpper() == "KEYS")) {
             ScanKeywords(args[1..]);
@@ -505,6 +568,11 @@ public class CmdInterpreter(DB db) {
         return result;
     }
 
+    /// <summary>
+    /// SCAN KEYWORDS command entry point.
+    /// Scans specified starting points for the specified keywords.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void ScanKeywords(string[] args) {
         if (args.Length > 2) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -733,6 +801,11 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// FIND command entry point.
+    /// Finds pages (URLs) containing the specified keyword.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void Find(string[] args) {
         if (args.Length != 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;
@@ -769,6 +842,10 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// LOG command entry point.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void Log(string[] args)
     {
         if (args.Length == 0) {
@@ -798,6 +875,12 @@ public class CmdInterpreter(DB db) {
         }
     }
 
+    /// <summary>
+    /// PSCAN command entry point.
+    /// Sets the maximum number of threads for web crawling.
+    /// Value 1 disables parallel crawling.
+    /// </summary>
+    /// <param name="args">the arguments of the command (see 'HELP' command for details)</param>
     private void PScan(string[] args) {
         if (args.Length > 1) {
             StatusCode = StatusCode.InvalidNumberOfArguments;

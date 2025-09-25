@@ -28,7 +28,12 @@ public class CrawlResult {
 public static class WebCrawler {
     private static readonly HttpClient httpClient = new();
 
-    // main crawling function
+    /// <summary>
+    /// Main crawling function for sequential web crawling.
+    /// </summary>
+    /// <param name="startingPoints">List of starting points for the crawl.</param>
+    /// <param name="keywords">List of keywords to search for.</param>
+    /// <returns>A task with a CrawlResult object containing the crawl results.</returns>
     public static async Task<CrawlResult> Crawl(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
         var tasks = new Queue<(string url, int internalLeft, int externalLeft, string spName, string baseUrl, string spURL)>();
@@ -315,7 +320,12 @@ public static class PWebCrawler {
 
     private static readonly HttpClient httpClient = new();
 
-    // main crawling function
+    /// <summary>
+    /// Main crawling function for parallel web crawling.
+    /// </summary>
+    /// <param name="startingPoints">List of starting points for the crawl.</param>
+    /// <param name="keywords">List of keywords to search for.</param>
+    /// <returns>A CrawlResult object containing the crawl results.</returns>
     public static CrawlResult Crawl(List<StartingPoint> startingPoints, List<string> keywords) {
         var result = new CrawlResult();
         object resultLock = new();
