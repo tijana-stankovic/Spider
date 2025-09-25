@@ -580,12 +580,6 @@ public class CmdInterpreter(DB db) {
             return;
         }
 
-        if (args.Length > 2) {
-            StatusCode = StatusCode.InvalidNumberOfArguments;
-            View.PrintStatus(StatusCode);
-            return;
-        }
-
         List<string>? names = null;
         List<string>? keywords = null;
         bool stop = false;
